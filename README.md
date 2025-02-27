@@ -5,7 +5,7 @@ findmyso
 <P>The findmyso function finds dynamic libraries (.so files)
 in the order the loader would find them.</P>
 
-<P>Copyright (c) 2024 by Peter Gulutzan.
+<P>Copyright (c) 2025 by Peter Gulutzan.
 All rights reserved.</P>
 
 <H3 id="executive-summary">What findmyso is good for</H3><HR>
@@ -223,7 +223,7 @@ gcc -o main main.c findmyso.c -DFINDMYSO_INCLUDE_COMMENTS=1 -Wl,-z,origin,-rpath
 </PRE></P>
 
 <H3 id="Contacts">Contacts</H3><HR>
-<P>GitHub.
+<P>GitHub. https://github.com/pgulutzan/findmyso
 This is where the sources of libmyso are, so use get clone to get them initially.
 The findmyso repository is also the place to put error reports, or just click "Like".
 </P>
