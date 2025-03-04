@@ -32,23 +32,46 @@ extern int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_l
 #define FINDMYSO_INCLUDE_COMMENTS 1
 #endif
 
+#ifndef FINDMYSO_INCLUDE_LD_AUDIT
+#define FINDMYSO_INCLUDE_LD_AUDIT 1
+#endif
+
+#ifndef FINDMYSO_INCLUDE_LD_PRELOAD
+#define FINDMYSO_INCLUDE_LD_PRELOAD 1
+#endif
+
+#ifndef FINDMYSO_INCLUDE_DT_RPATH_OR_DT_RUNPATH
+#define FINDMYSO_INCLUDE_DT_RPATH_OR_DT_RUNPATH 1
+#endif
+
+#ifndef FINDMYSO_INCLUDE_LD_LIBRARY_PATH
+#define FINDMYSO_INCLUDE_LD_LIBRARY_PATH 1
+#endif
+
+#ifndef FINDMYSO_INCLUDE_LD_RUN_PATH
+#define FINDMYSO_INCLUDE_LD_RUN_PATH 1
+#endif
+
+#ifndef FINDMYSO_INCLUDE_LD_SO_CACHE
+#define FINDMYSO_INCLUDE_LD_SO_CACHE 1
+#endif
+
+#ifndef FINDMYSO_INCLUDE_EXTRA_PATHS
+#define FINDMYSO_INCLUDE_EXTRA_PATHS 1
+#endif
+
 #ifndef FINDMYSO_MAX_PATH_LENGTH
 #define FINDMYSO_MAX_PATH_LENGTH 4096
 #endif
 
-#ifndef OCELOT_OS_LINUX
-#if defined(__linux__) || defined(__linux) || defined(linux)
-#define OCELOT_OS_LINUX
-#else
-#define OCELOT_OS_NONLINUX
-#endif
+#ifndef FINDMYSO_FREEBSD
 #if defined(__FreeBSD__)
-#define OCELOT_OS_FREEBSD
+#define FINDMYSO_FREEBSD
 #endif
 #endif
 
 #define FINDMYSO_VERSION_MAJOR 0
 #define FINDMYSO_VERSION_MINOR 9
-#define FINDMYSO_VERSION_PATCH 0
+#define FINDMYSO_VERSION_PATCH 1
 
 #endif
