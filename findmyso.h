@@ -60,6 +60,10 @@ extern int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_l
 #define FINDMYSO_INCLUDE_EXTRA_PATHS 1
 #endif
 
+#ifndef FINDMYSO_INCLUDE_GET_LIB_OR_PLATFORM
+#define FINDMYSO_INCLUDE_GET_LIB_OR_PLATFORM 1
+#endif
+
 #ifndef FINDMYSO_MAX_PATH_LENGTH
 #define FINDMYSO_MAX_PATH_LENGTH 4096
 #endif
@@ -72,6 +76,6 @@ extern int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_l
 
 #define FINDMYSO_VERSION_MAJOR 0
 #define FINDMYSO_VERSION_MINOR 9
-#define FINDMYSO_VERSION_PATCH 1
+#define FINDMYSO_VERSION_PATCH 2
 
 #endif

@@ -1,6 +1,6 @@
 findmyso
 
-<P>Version 0.9.1</P>
+<P>Version 0.9.2</P>
 
 <P>The findmyso function finds dynamic libraries (.so files)
 in the order the loader would find them.</P>
@@ -26,7 +26,8 @@ gcc -o main main.c findmyso.c  -Wl,-rpath,/tmp/findmyso_example
 </PRE>
 The result might look like this:
 <PRE>
-/* findmyso version 0.9.1 */
+/* findmyso version 0.9.2 */
+/* $LIB=lib/x86_64-linux-gnu $PLATFORM=x86_64 $ORIGIN=/home/pgulutzan/findmys */
 /* LD_PRELOAD */
 /* DT_RPATH */
 /* LD_LIBRARY_PATH */
@@ -163,9 +164,11 @@ In tests the usage was -Wl,-z,origin,-rpath,./lib,-rpath,\$ORIGIN</P>
 
 <H3 id="Re $LIB and $PLATFORM">Re Re $LIB and $PLATFORM</H3><HR> 
 <P>
-It sees and replaces these according to what the operating Linux documentation says.
+It sees and replaces these according to what the loader would do, which may differ
+from what the Linux documentation says.
+For $LIB we only fall back to /lib64 or lib if there's a severe problem.
 A comment may also appear.
-However, the results are not what's expected on Debian and probably unexpected on other platforms.</P>
+The results are what's expected for the platform. </P>
 
 <H3 id="Re library lists">Re library lists</H3><HR>
 <P>DT_RPATH and DT_RUNPATH and LD_LIBRARY_PATH and LD_RUNPATH and extra_paths can all contain lists of paths.

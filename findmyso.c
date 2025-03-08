@@ -2,8 +2,8 @@
   findmyso.c --   To get a list of paths and .so files along
   ld_audit + ld_preload + -rpath (dt_rpath) + ld_library_path + -rpath (dt_run_path) + ld_run_path + /etc/ld.so.cache + extra-paths
 
-   Version: 0.9.1
-   Last modified: March 3 2025
+   Version: 0.9.2
+   Last modified: March 7 2025
 
   Copyright (c) 2025 by Peter Gulutzan. All rights reserved.
 
@@ -38,10 +38,12 @@
 #endif
 
 static int findmyso_libraries_or_files(const char *sonames, const char *librarylist, char *buffer,
-                                       unsigned int *buffer_length, const char *type, unsigned int buffer_max_length);
+                                       unsigned int *buffer_length, const char *type, unsigned int buffer_max_length,
+                                       const char *lib, const char *platform, const char *origin);
 static int findmyso_strcat(char *buffer, unsigned int *buffer_length, const char *line, unsigned int buffer_max_length);
 static int findmyso_find_line_in_sonames(const char *sonames, const char *line);
-int findmyso_replace_lib_or_origin_or_platform(char* one_library_or_file, unsigned int *replacements_count);
+int findmyso_replace_lib_or_platform_or_origin(char* one_library_or_file, unsigned int *replacements_count, const char *lib, const char *platform, const char *origin);
+void findmyso_get_lib_or_platform(const char* replacee, char* replacer);
 
 #if (FINDMYSO_INCLUDE_DT_RPATH_OR_DT_RUNPATH == 1)
 /* Ordinarily link.h has extern ElfW(Dyn) _DYNAMIC but it's missing with FreeBSD */
@@ -78,6 +80,34 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
   }
 #endif
 
+  char lib[FINDMYSO_MAX_PATH_LENGTH]= ""; /* Usually this will be changed to whatever $LIB is. */
+  char platform[FINDMYSO_MAX_PATH_LENGTH]= ""; /* Usually this will be changed to whatever $LIB is. */
+  char origin[FINDMYSO_MAX_PATH_LENGTH]= ""; /* Usually this will be changed to whatever $LIB is. */
+  findmyso_get_lib_or_platform("$LIB", lib);
+  findmyso_get_lib_or_platform("$PLATFORM", platform);
+#ifdef OCELOT_OS_FREEBSD
+  readlink("/proc/curproc/file", origin, FINDMYSO_MAX_PATH_LENGTH);
+#else
+  readlink("/proc/self/exe", origin, FINDMYSO_MAX_PATH_LENGTH);
+#endif
+  for (char *p= origin + strlen(origin); p != origin; --p)
+  {
+    if (*p == '/')
+    {
+      *p= '\0';
+      break;
+    }
+  }
+
+#if (FINDMYSO_INCLUDE_COMMENTS == 1)
+  {
+    char lib_platform_origin_comment[FINDMYSO_MAX_PATH_LENGTH * 4];
+    sprintf(lib_platform_origin_comment, "/* $LIB=%s $PLATFORM=%s $ORIGIN=%s */\n", lib, platform, origin);
+    rval= findmyso_strcat(buffer, &buffer_length, lib_platform_origin_comment, buffer_max_length);
+    if (rval != FINDMYSO_OK) return rval;
+  }
+#endif
+
 #if (FINDMYSO_INCLUDE_AUDIT == 1)
   {
     const char *ld_audit= getenv("LD_AUDIT");
@@ -89,7 +119,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
 #endif
       if (ld_audit != NULL)
       {
-        rval= findmyso_libraries_or_files(sonames, ld_audit, buffer, &buffer_length, "LD_AUDIT", buffer_max_length);
+        rval= findmyso_libraries_or_files(sonames, ld_audit, buffer, &buffer_length, "LD_AUDIT", buffer_max_length, lib, platform, origin);
         if (rval != FINDMYSO_OK) return rval;
       }
     }
@@ -105,7 +135,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
 #endif
     if (ld_preload != NULL)
     {
-      rval= findmyso_libraries_or_files(sonames, ld_preload, buffer, &buffer_length, "LD_PRELOAD", buffer_max_length);
+      rval= findmyso_libraries_or_files(sonames, ld_preload, buffer, &buffer_length, "LD_PRELOAD", buffer_max_length, lib, platform, origin);
       if (rval != FINDMYSO_OK) return rval;
     }
   }
@@ -139,7 +169,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
 #endif
     if ((dt_strtab != NULL) && (dt_rpath != NULL))
     {
-      rval= findmyso_libraries_or_files(sonames, dt_strtab + dt_rpath->d_un.d_val, buffer, &buffer_length, "DT_RPATH", buffer_max_length);
+      rval= findmyso_libraries_or_files(sonames, dt_strtab + dt_rpath->d_un.d_val, buffer, &buffer_length, "DT_RPATH", buffer_max_length, lib, platform, origin);
       if (rval != FINDMYSO_OK) return rval;
     }
   }
@@ -154,7 +184,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
 #endif
     if (ld_library_path != NULL)
     {
-      rval= findmyso_libraries_or_files(sonames, ld_library_path, buffer, &buffer_length, "LD_LIBRARY_PATH", buffer_max_length);
+      rval= findmyso_libraries_or_files(sonames, ld_library_path, buffer, &buffer_length, "LD_LIBRARY_PATH", buffer_max_length, lib, platform, origin);
       if (rval != FINDMYSO_OK) return rval;
     }
   }
@@ -177,7 +207,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
 #endif
     if ((dt_strtab != NULL) && (dt_runpath != NULL))
     {
-      rval= findmyso_libraries_or_files(sonames, dt_strtab + dt_runpath->d_un.d_val, buffer, &buffer_length, "DT_RUNPATH", buffer_max_length);
+      rval= findmyso_libraries_or_files(sonames, dt_strtab + dt_runpath->d_un.d_val, buffer, &buffer_length, "DT_RUNPATH", buffer_max_length, lib, platform, origin);
       if (rval != FINDMYSO_OK) return rval;
     }
   }
@@ -192,7 +222,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
 #endif
     if (ld_run_path != NULL)
     {
-      rval= findmyso_libraries_or_files(sonames, ld_run_path, buffer, &buffer_length, "LD_RUN_PATH", buffer_max_length);
+      rval= findmyso_libraries_or_files(sonames, ld_run_path, buffer, &buffer_length, "LD_RUN_PATH", buffer_max_length, lib, platform, origin);
       if (rval != FINDMYSO_OK) return rval;
     }
   }
@@ -233,7 +263,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
       {
         char ld_so_cache_line[FINDMYSO_MAX_PATH_LENGTH * 5];
         char popen_arg[FINDMYSO_MAX_PATH_LENGTH];
-        if (ldconfig_attempts == 0) sprintf(popen_arg, "%s -p 2>/dev/null ", ldconfig);
+        if (ldconfig_attempts == 0) sprintf(popen_arg, "LD_LIBRARY_PATH= LD_DEBUG= LD_PRELOAD= %s -p 2>/dev/null ", ldconfig);
         else sprintf(popen_arg, "%s -r 2>/dev/null ", ldconfig);
         counter= 0;
         FILE *fp;
@@ -286,7 +316,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
       if (rval != FINDMYSO_OK) return rval;
 #endif
       {
-        rval= findmyso_libraries_or_files(sonames, extra_paths, buffer, &buffer_length, "extra_paths", buffer_max_length);
+        rval= findmyso_libraries_or_files(sonames, extra_paths, buffer, &buffer_length, "extra_paths", buffer_max_length, lib, platform, origin);
         if (rval != FINDMYSO_OK) return rval;
       }
     }
@@ -301,7 +331,8 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
    If this is called for LD_AUDIT or LD_PRELOAD then librarylist is actually a filelist, which should still be okay.
 */
 int findmyso_libraries_or_files(const char *sonames, const char *librarylist, char *buffer, unsigned int *buffer_length,
-                                const char *type, unsigned int buffer_max_length)
+                                const char *type, unsigned int buffer_max_length,
+                                const char *lib, const char *platform, const char *origin)
 {
   int rval;
   char delimiter1, delimiter2;
@@ -334,14 +365,14 @@ int findmyso_libraries_or_files(const char *sonames, const char *librarylist, ch
       if (strlen(one_library_or_file) > 0) /* If it's a blank we skip it. Is that right? */
       {
         unsigned int replacements_count;
-        rval= findmyso_replace_lib_or_origin_or_platform(one_library_or_file, &replacements_count);
+        rval= findmyso_replace_lib_or_platform_or_origin(one_library_or_file, &replacements_count, lib, platform, origin);
         if (rval !=FINDMYSO_OK) return rval;
 #if (FINDMYSO_INCLUDE_COMMENTS == 1)
         if (replacements_count > 0)
         {
           char comment[128];
-          if (replacements_count == 1) strcpy(comment, "/* replaced 1 instance of $LIB or $ORIGIN or $PLATFORM */\n");
-          else sprintf(comment, "/* replaced %d instance of $LIB or $ORIGIN or $PLATFORM */\n", replacements_count);
+          if (replacements_count == 1) strcpy(comment, "/* replaced 1 instance of $LIB or $PLATfORM or $ORIGIN */\n");
+          else sprintf(comment, "/* replaced %d instances of $LIB or $PLATFORM or $ORIGIN */\n", replacements_count);
           rval= findmyso_strcat(buffer, buffer_length, comment, buffer_max_length);
           if (rval != FINDMYSO_OK) return rval;
         }
@@ -464,7 +495,7 @@ int findmyso_find_line_in_sonames(const char *sonames, const char *line)
   Return: rval
   For $ORIGIN, first calculate what size increase could be, and return overflow error if it's more than maximum.
 */
-int findmyso_replace_lib_or_origin_or_platform(char* one_library_or_file, unsigned int *replacements_count)
+int findmyso_replace_lib_or_platform_or_origin(char* one_library_or_file, unsigned int *replacements_count, const char *lib, const char *platform, const char *origin)
 {
   *replacements_count= 0;
   if (strchr(one_library_or_file, '$') == NULL) return FINDMYSO_OK;
@@ -477,30 +508,18 @@ int findmyso_replace_lib_or_origin_or_platform(char* one_library_or_file, unsign
   {
     if (strncmp(p_line_in, "$ORIGIN", 7) == 0)
     {
-#ifdef OCELOT_OS_FREEBSD
-      readlink("/proc/curproc/file", buffer_for_replacement, FINDMYSO_MAX_PATH_LENGTH);
-#else
-      readlink("/proc/self/exe", buffer_for_replacement, FINDMYSO_MAX_PATH_LENGTH);
-#endif
-      /* it would be easier to call dirname() but that's bad if used twice. */
-      char *c= buffer_for_replacement + strlen(buffer_for_replacement);
-      for (; c >= buffer_for_replacement; --c) { if (*c == '/') break; }
-      *c= '\0';
-      replacee_length= 7;
+      strcpy(buffer_for_replacement, origin);
+      replacee_length= strlen(origin);
     }
     else if (strncmp(p_line_in, "$LIB", 4) == 0)
     {
-      if ((sizeof(void*)) == 8) strcpy(buffer_for_replacement, "lib64");
-      else strcpy(buffer_for_replacement, "lib");
-      replacee_length= 4;
+      strcpy(buffer_for_replacement, lib);
+      replacee_length= strlen(lib);
     }
     else if (strncmp(p_line_in, "$PLATFORM", 9) == 0)
     {
-      FILE *fp= popen("uname -m 2>/dev/null", "r");
-      if (fgets(buffer_for_replacement, sizeof(buffer_for_replacement), fp) == NULL)
-        strcpy(buffer_for_replacement, "?");
-      pclose(fp);
-      replacee_length= 9;
+      strcpy(buffer_for_replacement, platform);
+      replacee_length+= strlen(platform);
     }
     else
     {
@@ -523,4 +542,141 @@ int findmyso_replace_lib_or_origin_or_platform(char* one_library_or_file, unsign
   }
   strcpy(one_library_or_file, buffer_for_output);
   return FINDMYSO_OK;
+}
+
+/*
+  Pass: "$LIB" or "$PLATFORM"
+  Return: replacer has what would loader would change "$LIB" or "$PLATFORM" or "$ORIGIN" to
+  Re method: Use a dummy utility, preferably bin/true, ls should also work but isn't as good
+            (any program anywhere will provided it requires any .so, and libc.so is such).
+            First attempt: read ELF to get "ELF interpreter" i.e. loader name,
+            which probably is /lib64/ld-linux-x86-64.so.2 or /lib/ld-linux.so.2,
+            then use it with LD_DEBUG to see search_path when executing the dummy utility.
+            If that fails: same idea but just running the dummy.
+            If that fails: (lib) lib64 for 64-bit, lib for 32-bit. (platform) uname -m.
+  Todo: get PT_DYNAMIC the way we get PT_INTERN, instead of depending on extern _DYNAMIC
+  Todo: If there is a /tls (thread local storage) subdirectory or an x86_64 subdirectory,
+        search all. But show library search path=main, main-tls, main/x86_64
+*/
+void findmyso_get_lib_or_platform(const char* replacee, char *replacer)
+{
+  /* change_count == 0 && replacee == $PLATFORM */
+  int change_count= 0;
+#if (FINDMYSO_INCLUDE_GET_LIB_OR_PLATFORM == 1)
+  /* utility name */
+  char utility_name[256];
+  for (unsigned int i= 0; i < 5; ++i)
+  {
+    if (i == 0) strcpy(utility_name, "/bin/true");
+    else if (i == 1) strcpy(utility_name, "/usr/bin/true");
+    else if (i == 2) strcpy(utility_name, "true");
+    else if (i == 3) strcpy(utility_name, "/bin/ls");
+    else if (i == 4) strcpy(utility_name, "/usr/bin/ls");
+    else strcpy(utility_name, "ls");
+    if (access(utility_name, X_OK) == 0) break;
+  }
+  /* first attempt */
+  extern void* __executable_start;
+  char* dynamic_loader_name= NULL;
+  {
+    ElfW(Ehdr)*ehdr;
+    ehdr= (ElfW(Ehdr)*) &__executable_start; /* linker e.g. ld.bfd or ld.lld is supposed to add this */
+    if (memcmp(ehdr->e_ident, ELFMAG, SELFMAG) == 0) /* if ident is wrong maybe elf is corrupt */
+    {
+      const char*cc= (char*)ehdr; /* offsets are in bytes so I prefer to use a byte pointer */
+      cc+= ehdr->e_phoff; /* -> start of program headers */
+      ElfW(Phdr)*phdr;
+      for (unsigned int i= 0; i < ehdr->e_phnum; ++i) /* loop through program headers */
+      {
+        phdr= (ElfW(Phdr)*)cc;
+        if (phdr->p_type == PT_INTERP) /* i.e. ELF interpreter */
+        {
+          char*cc2= (char*)ehdr;
+          cc2+= phdr->p_offset;
+          dynamic_loader_name= cc2;
+          break;
+        }
+        cc+= ehdr->e_phentsize;
+      }
+    }
+  }
+
+  if (dynamic_loader_name != NULL)
+  {
+    FILE *fp;
+    char popen_arg[FINDMYSO_MAX_PATH_LENGTH + 1];
+    sprintf(popen_arg,
+    "env -u LD_DEBUG_OUTPUT LD_LIBRARY_PATH='/PRE_OOKPIK/%s/POST_OOKPIK' LD_DEBUG=libs %s --inhibit-cache %s 2>/dev/stdout",
+    replacee, dynamic_loader_name, utility_name);
+    fp= popen(popen_arg, "r");
+    if (fp != NULL)
+    {
+      char buffer_for_ookpik[FINDMYSO_MAX_PATH_LENGTH + 1];
+      while (fgets(buffer_for_ookpik, sizeof(buffer_for_ookpik), fp) != NULL)
+      {
+        const char *pre_ookpik= strstr(buffer_for_ookpik, "PRE_OOKPIK/");
+        if (pre_ookpik == NULL) continue;
+        const char *post_ookpik= strstr(pre_ookpik, "POST_OOKPIK");
+        if (post_ookpik == NULL) continue;
+        pre_ookpik+= strlen("PRE_OOKPIK/");
+        unsigned int len= post_ookpik - (pre_ookpik + 1);
+        memcpy(replacer, pre_ookpik, len);
+        *(replacer + len)= '\0';
+        ++change_count;
+        break;
+      }
+    }
+    fclose(fp);
+  }
+  /* second attempt */
+  if (change_count == 0)
+  {
+    FILE *fp;
+    char popen_arg[512];
+    sprintf(popen_arg,
+    "env -u LD_DEBUG_OUTPUT LD_LIBRARY_PATH='/PRE_OOKPIK/%s/POST_OOKPIK' LD_DEBUG=libs %s 2>/dev/stdout",
+    replacee, utility_name);
+    fp= popen(popen_arg, "r");
+    if (fp != NULL)
+    {
+      char buffer_for_ookpik[FINDMYSO_MAX_PATH_LENGTH + 1];
+      while (fgets(buffer_for_ookpik, sizeof(buffer_for_ookpik), fp) != NULL)
+      {
+        const char *pre_ookpik= strstr(buffer_for_ookpik, "PRE_OOKPIK/");
+        if (pre_ookpik == NULL) continue;
+        const char *post_ookpik= strstr(pre_ookpik, "POST_OOKPIK");
+        if (post_ookpik == NULL) continue;
+        pre_ookpik+= strlen("PRE_OOKPIK/");
+        unsigned int len= post_ookpik - (pre_ookpik + 1);
+        memcpy(replacer, pre_ookpik, len);
+        *(replacer + len)= '\0';
+        break;
+      }
+      fclose(fp);
+    }
+  }
+#endif
+  if (change_count != 0) return;
+  if (strcmp(replacee, "$LIB") == 0)
+  {
+    /* change_count == 0 && replacee == $LIB */
+    if ((sizeof(void*)) == 8) strcpy(replacer, "lib64"); /* default $LIB if findmyso__get_lib_or_platform doesn't work */
+    else strcpy(replacer, "lib");
+    return;
+  }
+
+  /* change_count == 0 && replacee == $PLATFORM */
+  {
+    char buffer_for_replacement[FINDMYSO_MAX_PATH_LENGTH + 1]= "?";
+    FILE *fp= popen("LD_LIBRARY_PATH= LD_DEBUG= LD_PRELOAD= uname -m 2>/dev/null", "r");
+    if (fp != NULL)
+    {
+      if (fgets(buffer_for_replacement, sizeof(buffer_for_replacement), fp) == NULL)
+        strcpy(buffer_for_replacement, "?");
+      pclose(fp);
+    }
+    char* pointer_to_n= strchr(buffer_for_replacement, '\n');
+    if (pointer_to_n != NULL) *pointer_to_n= '\0';
+    strcpy(replacer, buffer_for_replacement);
+  }
 }
