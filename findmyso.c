@@ -37,6 +37,10 @@
 #include <link.h>
 #endif
 
+#ifdef FINDMYSO_FREEBSD
+#include <sys/auxv.h>
+#endif
+
 static int findmyso_libraries_or_files(const char *sonames, const char *librarylist, char *buffer,
                                        unsigned int *buffer_length, const char *type, unsigned int buffer_max_length,
                                        const char *lib, const char *platform, const char *origin);
@@ -552,7 +556,7 @@ int findmyso_get_origin_and_lib_and_platform(char* origin, char* lib, char* plat
   {
     int readlink_return;
 #ifdef FINDMYSO_FREEBSD
-    readlink_return= readlink("/proc/curproc/file", origin, FINDMYSO_MAX_PATH_LENGTH);
+    readlink_return= elf_aux_info(AT_EXECPATH, origin, FINDMYSO_MAX_PATH_LENGTH);
 #else
     readlink_return= readlink("/proc/self/exe", origin, FINDMYSO_MAX_PATH_LENGTH);
 #endif
