@@ -1,6 +1,6 @@
 findmyso
 
-<P>Version 0.9.2</P>
+<P>Version 0.9.3</P>
 
 <P>The findmyso function finds dynamic libraries (.so files)
 in the order the loader would find them.</P>
@@ -26,12 +26,17 @@ gcc -o main main.c findmyso.c  -Wl,-rpath,/tmp/findmyso_example
 </PRE>
 The result might look like this:
 <PRE>
-/* findmyso version 0.9.2 */
-/* $LIB=lib/x86_64-linux-gnu $PLATFORM=x86_64 $ORIGIN=/home/pgulutzan/findmys */
+/* findmyso version 0.9.3 */
+/* $LIB=lib/x86_64-linux-gnu $PLATFORM=x86_64 $ORIGIN=/home/pgulutzan/findmyso */
 /* LD_PRELOAD */
 /* DT_RPATH */
 /* LD_LIBRARY_PATH */
-/home/pgulutzan/libcurl.so
+/* replaced /$LIB with /lib/x86_64-linux-gnu */
+/lib/x86_64-linux-gnu/libutil.so
+/lib/x86_64-linux-gnu/libutil.so.1
+/lib/x86_64-linux-gnu/libcurl.so.4.6.0
+/lib/x86_64-linux-gnu/libcurl.so
+/lib/x86_64-linux-gnu/libcurl.so.4
 /* DT_RUNPATH */
 /tmp/findmyso_example/libutil.so
 /* LD_RUN_PATH */
@@ -45,8 +50,8 @@ rval=0
 </PRE>
 </P>
 
-<P>This means: the loader would look first in /home/pgulutzan
-because there was an earlier "export LD_LIBRARYPPATH=/home/pgulutzan"
+<P>This means: the loader would look first in /lib/x86_64-linux-gnu
+because there was an earlier "export LD_LIBRARY_PATH='/$LIB'"
 (not shown because values of environment variables can be surprises).
 This takes precedence over DT_RUNPATH, which is where the first
 occurrence of libutil.so appears (this appears because of the
@@ -102,7 +107,7 @@ which is determined by gcc flags and environment variables.</P>
 <H3 id="Re LD_AUDIT">Re LD_AUDIT</H3><HR>
 <P>Actually .so files in the LD_AUDIT environment variable https://man7.org/linux/man-pages/man7/rtld-audit.7.html
 would come first but would be specialized .so files that nobody cares about, thus this category should be empty.
-So (LD_AUDIT) will only be listed if getenv("LD_AUDIT") is not NULL.</P>
+</P>
 
 <H3 id="Re LD_PRELOAD">Re LD_PRELOAD</H3><HR>
 <P>Ordinarily this appears first. See https://www.secureideas.com/blog/2020/ldpreload-introduction.html
@@ -116,7 +121,7 @@ If header is stripped (unlikely), then the buffer will have nothing in DT_RPATH 
 elf.h seems to be standard but it might be useless to try to look for it with mingw.
 On test machine it's DT_RPATH iff --disable-new-dtags, this may be default on an old platform.
 On test machine it's DT_RUNPATH if --enable-new-dtags which is typically default nowadays..
-Some say that loader searches DT_RPATH recursively, if so I'd try ls -R, but in tests it doesn't happen.</P>
+Some say that loader searches DT_RPATH recursively, but in tests it doesn't happen.</P>
 
 <H3 id="Re LD_LIBRARY_PATH environment variable">Re LD_LIBRARY_PATH environment variable</H3><HR>
 <P>This comes after DT_RPATH and before others.</P>
@@ -166,9 +171,8 @@ In tests the usage was -Wl,-z,origin,-rpath,./lib,-rpath,\$ORIGIN</P>
 <P>
 It sees and replaces these according to what the loader would do, which may differ
 from what the Linux documentation says.
-For $LIB we only fall back to /lib64 or lib if there's a severe problem.
-A comment may also appear.
-The results are what's expected for the platform. </P>
+For $LIB we only fall back to /lib64 or lib if there's an unexpected severe problem.
+The results are what's expected for the platform but we do not search /tls or platform subdirectoriesd.</P>
 
 <H3 id="Re library lists">Re library lists</H3><HR>
 <P>DT_RPATH and DT_RUNPATH and LD_LIBRARY_PATH and LD_RUNPATH and extra_paths can all contain lists of paths.
@@ -201,7 +205,7 @@ There will be an error if any soname is longer than that, or if the name of any 
 For example /* LD_LIBRARY_PATH */" tells you that what follows, if anything,
 is due to the LD_LIBRARY_PATH environment variable.
 Comments are always separate lines and always formatted like C-style comments.
-To strip comments, use gcc ... -DFINDMYSO_INCLUDE_COMMENTS=0</P>
+To strip comments, use gcc ... -DFINDMYSO_WARNING_LEVEL=0 (the default is 4).</P>
 
 <H3 id="Re comparisons">Re comparisons</H3><HR>
 <P>Usually findmyso considers that a file is matching if it starts with one of the passed soname values.

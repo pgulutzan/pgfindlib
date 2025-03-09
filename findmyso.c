@@ -2,8 +2,8 @@
   findmyso.c --   To get a list of paths and .so files along
   ld_audit + ld_preload + -rpath (dt_rpath) + ld_library_path + -rpath (dt_run_path) + ld_run_path + /etc/ld.so.cache + extra-paths
 
-   Version: 0.9.2
-   Last modified: March 7 2025
+   Version: 0.9.3
+   Last modified: March 9 2025
 
   Copyright (c) 2025 by Peter Gulutzan. All rights reserved.
 
@@ -43,7 +43,8 @@ static int findmyso_libraries_or_files(const char *sonames, const char *libraryl
 static int findmyso_strcat(char *buffer, unsigned int *buffer_length, const char *line, unsigned int buffer_max_length);
 static int findmyso_find_line_in_sonames(const char *sonames, const char *line);
 int findmyso_replace_lib_or_platform_or_origin(char* one_library_or_file, unsigned int *replacements_count, const char *lib, const char *platform, const char *origin);
-void findmyso_get_lib_or_platform(const char* replacee, char* replacer);
+int findmyso_get_origin_and_lib_and_platform(char* origin, char* lib, char *platform,
+                                              char *buffer, unsigned int *buffer_length, unsigned buffer_max_length);
 
 #if (FINDMYSO_INCLUDE_DT_RPATH_OR_DT_RUNPATH == 1)
 /* Ordinarily link.h has extern ElfW(Dyn) _DYNAMIC but it's missing with FreeBSD */
@@ -71,7 +72,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
   unsigned int buffer_length= 0;
   int rval;
 
-#if (FINDMYSO_INCLUDE_COMMENTS == 1)
+#if (FINDMYSO_WARNING_LEVEL > 3)
   {
     char version[128];
     sprintf(version, "/* findmyso version %d.%d.%d */\n", FINDMYSO_VERSION_MAJOR, FINDMYSO_VERSION_MINOR, FINDMYSO_VERSION_PATCH);
@@ -83,23 +84,10 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
   char lib[FINDMYSO_MAX_PATH_LENGTH]= ""; /* Usually this will be changed to whatever $LIB is. */
   char platform[FINDMYSO_MAX_PATH_LENGTH]= ""; /* Usually this will be changed to whatever $LIB is. */
   char origin[FINDMYSO_MAX_PATH_LENGTH]= ""; /* Usually this will be changed to whatever $LIB is. */
-  findmyso_get_lib_or_platform("$LIB", lib);
-  findmyso_get_lib_or_platform("$PLATFORM", platform);
-#ifdef OCELOT_OS_FREEBSD
-  readlink("/proc/curproc/file", origin, FINDMYSO_MAX_PATH_LENGTH);
-#else
-  readlink("/proc/self/exe", origin, FINDMYSO_MAX_PATH_LENGTH);
-#endif
-  for (char *p= origin + strlen(origin); p != origin; --p)
-  {
-    if (*p == '/')
-    {
-      *p= '\0';
-      break;
-    }
-  }
+  rval= findmyso_get_origin_and_lib_and_platform(origin, lib, platform, buffer, &buffer_length, buffer_max_length);
+  if (rval != FINDMYSO_OK) return rval;
 
-#if (FINDMYSO_INCLUDE_COMMENTS == 1)
+#if (FINDMYSO_WARNING_LEVEL > 3)
   {
     char lib_platform_origin_comment[FINDMYSO_MAX_PATH_LENGTH * 4];
     sprintf(lib_platform_origin_comment, "/* $LIB=%s $PLATFORM=%s $ORIGIN=%s */\n", lib, platform, origin);
@@ -111,12 +99,12 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
 #if (FINDMYSO_INCLUDE_AUDIT == 1)
   {
     const char *ld_audit= getenv("LD_AUDIT");
-    if (ld_audit != NULL)
-    {
-#if (FINDMYSO_INCLUDE_COMMENTS == 1)
+#if (FINDMYSO_WARNING_LEVEL > 2)
       rval= findmyso_strcat(buffer, &buffer_length, "/* LD_AUDIT */\n", buffer_max_length);
       if (rval != FINDMYSO_OK) return rval;
 #endif
+    if (ld_audit != NULL)
+    {
       if (ld_audit != NULL)
       {
         rval= findmyso_libraries_or_files(sonames, ld_audit, buffer, &buffer_length, "LD_AUDIT", buffer_max_length, lib, platform, origin);
@@ -129,7 +117,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
 #if (FINDMYSO_INCLUDE_LD_PRELOAD == 1)
   {
     const char *ld_preload= getenv("LD_PRELOAD");
-#if (FINDMYSO_INCLUDE_COMMENTS == 1)
+#if (FINDMYSO_WARNING_LEVEL > 2)
     rval= findmyso_strcat(buffer, &buffer_length, "/* LD_PRELOAD */\n", buffer_max_length);
     if (rval != FINDMYSO_OK) return rval;
 #endif
@@ -149,7 +137,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
   /* in theory "extern __attribute__((weak)) ... _DYNAMIC[];" could result in _DYNAMIC == NULL */
   if (_DYNAMIC == NULL)
   {
-#if (FINDMYSO_INCLUDE_COMMENTS == 1)
+#if (FINDMYSO_WARNING_LEVEL > 0)
     rval= findmyso_strcat(buffer, &buffer_length, "/* Cannot read DT_RPATH because _DYNAMIC is NULL */\n", buffer_max_length);
     if (rval != FINDMYSO_OK) return rval;
 #endif
@@ -163,7 +151,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
       if (dynamic->d_tag == DT_STRTAB) dt_strtab= (const char *)dynamic->d_un.d_val;
       ++dynamic;
     }
-#if (FINDMYSO_INCLUDE_COMMENTS == 1)
+#if (FINDMYSO_WARNING_LEVEL > 2)
     rval= findmyso_strcat(buffer, &buffer_length, "/* DT_RPATH */\n", buffer_max_length);
     if (rval != FINDMYSO_OK) return rval;
 #endif
@@ -178,7 +166,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
 #if (FINDMYSO_INCLUDE_LD_LIBRARY_PATH == 1)
   {
     const char *ld_library_path= getenv("LD_LIBRARY_PATH");
-#if (FINDMYSO_INCLUDE_COMMENTS == 1)
+#if (FINDMYSO_WARNING_LEVEL > 2)
     rval= findmyso_strcat(buffer, &buffer_length, "/* LD_LIBRARY_PATH */\n", buffer_max_length);
     if (rval != FINDMYSO_OK) return rval;
 #endif
@@ -193,7 +181,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
 #if (FINDMYSO_INCLUDE_DT_RPATH_OR_DT_RUNPATH == 1)
   if (_DYNAMIC == NULL)
   {
-#if (FINDMYSO_INCLUDE_COMMENTS == 1)
+#if (FINDMYSO_WARNING_LEVEL > 0)
     rval= findmyso_strcat(buffer, &buffer_length, "/* Cannot read DT_RUNPATH because _DYNAMIC is NULL */\n", buffer_max_length);
     if (rval != FINDMYSO_OK) return rval;
 #endif
@@ -201,7 +189,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
   }
   else /* if (_DYNAMIC != NULL) */
   {
-#if (FINDMYSO_INCLUDE_COMMENTS == 1)
+#if (FINDMYSO_WARNING_LEVEL > 2)
     rval= findmyso_strcat(buffer, &buffer_length, "/* DT_RUNPATH */\n", buffer_max_length);
     if (rval != FINDMYSO_OK) return rval;
 #endif
@@ -216,7 +204,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
 #if (FINDMYSO_INCLUDE_LD_RUN_PATH == 1)
   {
     const char *ld_run_path= getenv("LD_RUN_PATH");
-#if (FINDMYSO_INCLUDE_COMMENTS == 1)
+#if (FINDMYSO_WARNING_LEVEL > 3)
     rval= findmyso_strcat(buffer, &buffer_length, "/* LD_RUN_PATH */\n", buffer_max_length);
     if (rval != FINDMYSO_OK) return rval;
 #endif
@@ -230,7 +218,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
 
 #if (FINDMYSO_INCLUDE_LD_SO_CACHE == 1)
   {
-#if (FINDMYSO_INCLUDE_COMMENTS == 1)
+#if (FINDMYSO_WARNING_LEVEL > 2)
     rval= findmyso_strcat(buffer, &buffer_length, "/* ld.so.cache */\n", buffer_max_length);
     if (rval != FINDMYSO_OK) return rval;
 #endif
@@ -247,7 +235,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
     }
     if (ldconfig == NULL)
     {
-#if (FINDMYSO_INCLUDE_COMMENTS == 1)
+#if (FINDMYSO_WARNING_LEVEL > 0)
       rval= findmyso_strcat(buffer, &buffer_length, "/* access('...ldconfig', X_OK) failed */\n", buffer_max_length);
       if (rval != FINDMYSO_OK) return rval;
 #endif
@@ -294,7 +282,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
         }
         if (counter > 0) break; /* So if ldconfig -p succeeds, don't try ldconfig -r */
       }
-#if (FINDMYSO_INCLUDE_COMMENTS == 1)
+#if (FINDMYSO_WARNING_LEVEL > 0)
       if (counter == 0)
       {
         char comment[256];
@@ -311,7 +299,7 @@ int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_length, 
   {
     if (extra_paths != NULL)
     {
-#if (FINDMYSO_INCLUDE_COMMENTS == 1)
+#if (FINDMYSO_WARNING_LEVEL > 2)
       rval= findmyso_strcat(buffer, &buffer_length, "/* extra_paths */\n", buffer_max_length);
       if (rval != FINDMYSO_OK) return rval;
 #endif
@@ -365,14 +353,15 @@ int findmyso_libraries_or_files(const char *sonames, const char *librarylist, ch
       if (strlen(one_library_or_file) > 0) /* If it's a blank we skip it. Is that right? */
       {
         unsigned int replacements_count;
+        char orig_one_library_or_file[FINDMYSO_MAX_PATH_LENGTH + 1];
+        strcpy(orig_one_library_or_file, one_library_or_file);
         rval= findmyso_replace_lib_or_platform_or_origin(one_library_or_file, &replacements_count, lib, platform, origin);
         if (rval !=FINDMYSO_OK) return rval;
-#if (FINDMYSO_INCLUDE_COMMENTS == 1)
+#if (FINDMYSO_WARNING_LEVEL > 3)
         if (replacements_count > 0)
         {
-          char comment[128];
-          if (replacements_count == 1) strcpy(comment, "/* replaced 1 instance of $LIB or $PLATfORM or $ORIGIN */\n");
-          else sprintf(comment, "/* replaced %d instances of $LIB or $PLATFORM or $ORIGIN */\n", replacements_count);
+          char comment[FINDMYSO_MAX_PATH_LENGTH*2 + 128];
+          sprintf(comment, "/* replaced %s with %s */\n", orig_one_library_or_file, one_library_or_file);
           rval= findmyso_strcat(buffer, buffer_length, comment, buffer_max_length);
           if (rval != FINDMYSO_OK) return rval;
         }
@@ -380,10 +369,9 @@ int findmyso_libraries_or_files(const char *sonames, const char *librarylist, ch
         if ((strcmp(type, "LD_AUDIT") == 0) || (strcmp(type, "LD_PRELOAD") == 0)) /* if LD_AUDIT or LD_PRELOAD we want a file name */
         {
           if (findmyso_find_line_in_sonames(sonames, one_library_or_file) == 0) continue; /* doesn't match requirement */
-#if (FINDMYSO_INCLUDE_COMMENTS == 1)
+#if (FINDMYSO_WARNING_LEVEL > 1)
           if (access(one_library_or_file, X_OK) != 0)
           {
-            char comment[256];
             rval= findmyso_strcat(buffer, buffer_length, "/* access(filename, X_OK) failed for following file */\n", buffer_max_length);
             if (rval != FINDMYSO_OK) return rval;
           }
@@ -493,52 +481,47 @@ int findmyso_find_line_in_sonames(const char *sonames, const char *line)
   Pass: library or file name
   Do: replace with same library or file name, except that $ORIGIN or $LIB or $PLATFORM are replaced
   Return: rval
-  For $ORIGIN, first calculate what size increase could be, and return overflow error if it's more than maximum.
+  Todo: It seems loader replaces $LIB or $LIB/ but not $LIB in $LIBxxx, this replaces $LIB in $LIBxxx too.
 */
 int findmyso_replace_lib_or_platform_or_origin(char* one_library_or_file, unsigned int *replacements_count, const char *lib, const char *platform, const char *origin)
 {
   *replacements_count= 0;
   if (strchr(one_library_or_file, '$') == NULL) return FINDMYSO_OK;
-  char buffer_for_output[FINDMYSO_MAX_PATH_LENGTH + 1];
+  char buffer_for_output[FINDMYSO_MAX_PATH_LENGTH*2 + 1];
   char *p_line_out= &buffer_for_output[0];
-  char buffer_for_replacement[FINDMYSO_MAX_PATH_LENGTH + 1];
-  int replacee_length;
-  memset(buffer_for_output, '\0', FINDMYSO_MAX_PATH_LENGTH + 1); /* todo: find out why */
-  for (const char *p_line_in= one_library_or_file; *p_line_in != '\0'; ++p_line_in)
+  *p_line_out= '\0';
+  for (const char *p_line_in= one_library_or_file; *p_line_in != '\0';)
   {
     if (strncmp(p_line_in, "$ORIGIN", 7) == 0)
     {
-      strcpy(buffer_for_replacement, origin);
-      replacee_length= strlen(origin);
+      strcpy(p_line_out, origin);
+      p_line_out+= strlen(origin);
+      p_line_in+= strlen("$ORIGIN");
+      ++*replacements_count;
     }
     else if (strncmp(p_line_in, "$LIB", 4) == 0)
     {
-      strcpy(buffer_for_replacement, lib);
-      replacee_length= strlen(lib);
+      strcpy(p_line_out, lib);
+      p_line_out+= strlen(lib);
+      p_line_in+= strlen("$LIB");
+      ++*replacements_count;
     }
     else if (strncmp(p_line_in, "$PLATFORM", 9) == 0)
     {
-      strcpy(buffer_for_replacement, platform);
-      replacee_length+= strlen(platform);
+      strcpy(p_line_out, platform);
+      p_line_out+= strlen(platform);
+      p_line_in+= strlen("$PLATFORM");
+      ++*replacements_count;
     }
     else
     {
-      if ((p_line_out - &buffer_for_output[0]) > FINDMYSO_MAX_PATH_LENGTH)
-        return FINDMYSO_ERROR_MAX_PATH_LENGTH_TOO_SMALL;
       *p_line_out= *p_line_in;
       ++p_line_out;
-      *p_line_out= '\0';
-      continue;
+      ++p_line_in;
     }
-    int buffer_for_replacement_length= strlen(buffer_for_replacement);
-    if (((p_line_out + buffer_for_replacement_length) - &buffer_for_output[0]) > FINDMYSO_MAX_PATH_LENGTH)
+    if ((p_line_out - &buffer_for_output[0]) > FINDMYSO_MAX_PATH_LENGTH)
       return FINDMYSO_ERROR_MAX_PATH_LENGTH_TOO_SMALL;
-    strcat(p_line_out, buffer_for_replacement);
-    p_line_out+= strlen(buffer_for_replacement);
-    if (*(p_line_out - 1) == '\n') --p_line_out;
     *p_line_out= '\0';
-    p_line_in+= replacee_length - 1; /* "- 1" because loop is for (...++p_line_in)" */
-    ++*replacements_count;
   }
   strcpy(one_library_or_file, buffer_for_output);
   return FINDMYSO_OK;
@@ -557,115 +540,191 @@ int findmyso_replace_lib_or_platform_or_origin(char* one_library_or_file, unsign
   Todo: get PT_DYNAMIC the way we get PT_INTERN, instead of depending on extern _DYNAMIC
   Todo: If there is a /tls (thread local storage) subdirectory or an x86_64 subdirectory,
         search all. But show library search path=main, main-tls, main/x86_64
+  Todo: If dynamic loader is not the usual e.g. due to "-Wl,-I/tmp/my_ld.so" then add a comment.
 */
-void findmyso_get_lib_or_platform(const char* replacee, char *replacer)
+int findmyso_get_origin_and_lib_and_platform(char* origin, char* lib, char* platform,
+                                              char* buffer, unsigned int* buffer_length, unsigned int buffer_max_length)
 {
-  /* change_count == 0 && replacee == $PLATFORM */
-  int change_count= 0;
-#if (FINDMYSO_INCLUDE_GET_LIB_OR_PLATFORM == 1)
-  /* utility name */
-  char utility_name[256];
-  for (unsigned int i= 0; i < 5; ++i)
+  int lib_change_count= 0;
+  int platform_change_count= 0;
+  int rval= FINDMYSO_OK;
+
   {
-    if (i == 0) strcpy(utility_name, "/bin/true");
-    else if (i == 1) strcpy(utility_name, "/usr/bin/true");
-    else if (i == 2) strcpy(utility_name, "true");
-    else if (i == 3) strcpy(utility_name, "/bin/ls");
-    else if (i == 4) strcpy(utility_name, "/usr/bin/ls");
-    else strcpy(utility_name, "ls");
-    if (access(utility_name, X_OK) == 0) break;
-  }
-  /* first attempt */
-  extern void* __executable_start;
-  char* dynamic_loader_name= NULL;
-  {
-    ElfW(Ehdr)*ehdr;
-    ehdr= (ElfW(Ehdr)*) &__executable_start; /* linker e.g. ld.bfd or ld.lld is supposed to add this */
-    if (memcmp(ehdr->e_ident, ELFMAG, SELFMAG) == 0) /* if ident is wrong maybe elf is corrupt */
+    int readlink_return;
+#ifdef FINDMYSO_FREEBSD
+    readlink_return= readlink("/proc/curproc/file", origin, FINDMYSO_MAX_PATH_LENGTH);
+#else
+    readlink_return= readlink("/proc/self/exe", origin, FINDMYSO_MAX_PATH_LENGTH);
+#endif
+    if ((readlink_return < 0) || (readlink_return >= FINDMYSO_MAX_PATH_LENGTH))
     {
-      const char*cc= (char*)ehdr; /* offsets are in bytes so I prefer to use a byte pointer */
-      cc+= ehdr->e_phoff; /* -> start of program headers */
-      ElfW(Phdr)*phdr;
-      for (unsigned int i= 0; i < ehdr->e_phnum; ++i) /* loop through program headers */
+#if (FINDMYSO_WARNING_LEVEL > 1)
+      rval= findmyso_strcat(buffer, buffer_length, "/* readlink failed so $ORIGIN is unknown */\n", buffer_max_length);
+      if (rval != FINDMYSO_OK) return rval;
+#endif
+      strcpy(origin, "");
+    }
+    else *(origin + readlink_return)= '\0';
+    for (char *p= origin + strlen(origin); p != origin; --p)
+    {
+      if (*p == '/')
       {
-        phdr= (ElfW(Phdr)*)cc;
-        if (phdr->p_type == PT_INTERP) /* i.e. ELF interpreter */
-        {
-          char*cc2= (char*)ehdr;
-          cc2+= phdr->p_offset;
-          dynamic_loader_name= cc2;
-          break;
-        }
-        cc+= ehdr->e_phentsize;
+        *p= '\0';
+        break;
       }
     }
+  }
+
+#if (FINDMYSO_INCLUDE_GET_LIB_OR_PLATFORM == 1)
+  /* utility name */
+  char utility_name[256]= "";
+  if (access("/bin/true", X_OK) == 0) strcpy(utility_name, "/bin/true");
+  else if (access("/bin/cp", X_OK) == 0) strcpy(utility_name, "/bin/cp");
+  else if (access("/usr/bin/true", X_OK) == 0) strcpy(utility_name, "/usr/bin/true");
+  else if (access("/usr/bin/cp", X_OK) == 0) strcpy(utility_name, "/usr/bin/cp");
+#if (FINDMYSO_WARNING_LEVEL > 1)
+  if (strcmp(utility_name, "") == 0)
+  {
+    rval= findmyso_strcat(buffer, buffer_length, "/* no access to [/usr]/bin/true or [/usr]/cp */\n", buffer_max_length);
+    if (rval != FINDMYSO_OK) return rval;
+  }
+#endif
+
+extern void* __executable_start;
+  ElfW(Ehdr)*ehdr= NULL;
+  if (__executable_start != NULL)
+  {
+    ehdr= (ElfW(Ehdr)*) &__executable_start; /* linker e.g. ld.bfd or ld.lld is supposed to add this */
+    if (memcmp(ehdr->e_ident, ELFMAG, SELFMAG) != 0)
+    {
+#if (FINDMYSO_WARNING_LEVEL > 1)
+      rval= findmyso_strcat(buffer, buffer_length, "/* ehdr->ident not valid */\n", buffer_max_length);
+      if (rval != FINDMYSO_OK) return rval;
+#endif
+      ehdr= NULL;
+    }
+  }
+
+  /* first attempt */
+
+  const char* dynamic_loader_name= NULL;
+  if (ehdr != NULL)
+  {
+    const char*cc= (char*)ehdr; /* offsets are in bytes so I prefer to use a byte pointer */
+    cc+= ehdr->e_phoff; /* -> start of program headers */
+    ElfW(Phdr)*phdr;
+    for (unsigned int i= 0; i < ehdr->e_phnum; ++i) /* loop through program headers */
+    {
+      phdr= (ElfW(Phdr)*)cc;
+      if (phdr->p_type == PT_INTERP) /* i.e. ELF interpreter */
+      {
+        char*cc2= (char*)ehdr;
+        cc2+= phdr->p_offset;
+        dynamic_loader_name= cc2;
+        break;
+      }
+      cc+= ehdr->e_phentsize;
+    }
+  }
+
+  if (dynamic_loader_name == NULL)
+  {
+    if ((sizeof(void*)) == 8) dynamic_loader_name= "/lib64/ld-linux-x86-64.so.2"; /* make some gcc/glibc assumptions */
+    else dynamic_loader_name= "/lib/ld-linux.so.2";
+#if (FINDMYSO_WARNING_LEVEL > 1)
+    char comment[512];
+    sprintf(comment, "/* can't get ehdr dynamic loader so assume %s */\n", dynamic_loader_name);
+    rval= findmyso_strcat(buffer, buffer_length, comment, buffer_max_length);
+    if (rval != FINDMYSO_OK) return rval;
+#endif
+  }
+
+  if (access(dynamic_loader_name, X_OK) != 0)
+  {
+#if (FINDMYSO_WARNING_LEVEL > 1)
+    char comment[512];
+    sprintf(comment, "/* can't access %s */\n", dynamic_loader_name);
+    rval= findmyso_strcat(buffer, buffer_length, comment, buffer_max_length);
+    if (rval != FINDMYSO_OK) return rval;
+#endif
+    dynamic_loader_name= NULL;
   }
 
   if (dynamic_loader_name != NULL)
   {
-    FILE *fp;
-    char popen_arg[FINDMYSO_MAX_PATH_LENGTH + 1];
-    sprintf(popen_arg,
-    "env -u LD_DEBUG_OUTPUT LD_LIBRARY_PATH='/PRE_OOKPIK/%s/POST_OOKPIK' LD_DEBUG=libs %s --inhibit-cache %s 2>/dev/stdout",
-    replacee, dynamic_loader_name, utility_name);
-    fp= popen(popen_arg, "r");
-    if (fp != NULL)
+#define REPLACEE_IS_LIB 0
+#define REPLACEE_IS_PLATFORM 1
+    for (int i= REPLACEE_IS_LIB; i <= REPLACEE_IS_PLATFORM; ++i) /* 0 means "$LIB", 1 means "$PLATFORM" */
     {
-      char buffer_for_ookpik[FINDMYSO_MAX_PATH_LENGTH + 1];
-      while (fgets(buffer_for_ookpik, sizeof(buffer_for_ookpik), fp) != NULL)
+      char replacee[16];
+      if (i == REPLACEE_IS_LIB) strcpy(replacee, "$LIB");
+      else strcpy(replacee, "$PLATFORM");
+      int change_count= 0;
+      FILE *fp;
+      char popen_arg[FINDMYSO_MAX_PATH_LENGTH + 1];
+      sprintf(popen_arg,
+      "env -u LD_DEBUG_OUTPUT LD_LIBRARY_PATH='/PRE_OOKPIK/%s/POST_OOKPIK' LD_DEBUG=libs %s --inhibit-cache %s 2>/dev/stdout",
+      replacee, dynamic_loader_name, utility_name);
+      fp= popen(popen_arg, "r");
+      if (fp != NULL)
       {
-        const char *pre_ookpik= strstr(buffer_for_ookpik, "PRE_OOKPIK/");
-        if (pre_ookpik == NULL) continue;
-        const char *post_ookpik= strstr(pre_ookpik, "POST_OOKPIK");
-        if (post_ookpik == NULL) continue;
-        pre_ookpik+= strlen("PRE_OOKPIK/");
-        unsigned int len= post_ookpik - (pre_ookpik + 1);
-        memcpy(replacer, pre_ookpik, len);
-        *(replacer + len)= '\0';
-        ++change_count;
-        break;
+        char buffer_for_ookpik[FINDMYSO_MAX_PATH_LENGTH + 1];
+        while (fgets(buffer_for_ookpik, sizeof(buffer_for_ookpik), fp) != NULL)
+        {
+          const char *pre_ookpik= strstr(buffer_for_ookpik, "PRE_OOKPIK/");
+          if (pre_ookpik == NULL) continue;
+          const char *post_ookpik= strstr(pre_ookpik, "POST_OOKPIK");
+          if (post_ookpik == NULL) continue;
+          pre_ookpik+= strlen("PRE_OOKPIK/");
+          unsigned int len= post_ookpik - (pre_ookpik + 1);
+          if (i == REPLACEE_IS_LIB) { memcpy(lib, pre_ookpik, len); *(lib + len)= '\0'; ++lib_change_count; }
+          else { memcpy(platform, pre_ookpik, len); *(platform + len)= '\0'; ++platform_change_count; }
+          ++change_count;
+          break;
+        }
+        fclose(fp);
       }
-    }
-    fclose(fp);
-  }
-  /* second attempt */
-  if (change_count == 0)
-  {
-    FILE *fp;
-    char popen_arg[512];
-    sprintf(popen_arg,
-    "env -u LD_DEBUG_OUTPUT LD_LIBRARY_PATH='/PRE_OOKPIK/%s/POST_OOKPIK' LD_DEBUG=libs %s 2>/dev/stdout",
-    replacee, utility_name);
-    fp= popen(popen_arg, "r");
-    if (fp != NULL)
-    {
-      char buffer_for_ookpik[FINDMYSO_MAX_PATH_LENGTH + 1];
-      while (fgets(buffer_for_ookpik, sizeof(buffer_for_ookpik), fp) != NULL)
+      /* second attempt */
+      if (change_count == 0)
       {
-        const char *pre_ookpik= strstr(buffer_for_ookpik, "PRE_OOKPIK/");
-        if (pre_ookpik == NULL) continue;
-        const char *post_ookpik= strstr(pre_ookpik, "POST_OOKPIK");
-        if (post_ookpik == NULL) continue;
-        pre_ookpik+= strlen("PRE_OOKPIK/");
-        unsigned int len= post_ookpik - (pre_ookpik + 1);
-        memcpy(replacer, pre_ookpik, len);
-        *(replacer + len)= '\0';
-        break;
+        sprintf(popen_arg,
+        "env -u LD_DEBUG_OUTPUT LD_LIBRARY_PATH='/PRE_OOKPIK/%s/POST_OOKPIK' LD_DEBUG=libs %s 2>/dev/stdout",
+        replacee, utility_name);
+        fp= popen(popen_arg, "r");
+        if (fp != NULL)
+        {
+          char buffer_for_ookpik[FINDMYSO_MAX_PATH_LENGTH + 1];
+          while (fgets(buffer_for_ookpik, sizeof(buffer_for_ookpik), fp) != NULL)
+          {
+            const char *pre_ookpik= strstr(buffer_for_ookpik, "PRE_OOKPIK/");
+            if (pre_ookpik == NULL) continue;
+            const char *post_ookpik= strstr(pre_ookpik, "POST_OOKPIK");
+            if (post_ookpik == NULL) continue;
+            pre_ookpik+= strlen("PRE_OOKPIK/");
+            unsigned int len= post_ookpik - (pre_ookpik + 1);
+            if (i == REPLACEE_IS_LIB) { memcpy(lib, pre_ookpik, len); *(lib + len)= '\0'; ++lib_change_count; }
+            else { memcpy(platform, pre_ookpik, len); *(platform + len)= '\0'; ++platform_change_count; }
+            break;
+          }
+          fclose(fp);
+        }
       }
-      fclose(fp);
     }
   }
 #endif
-  if (change_count != 0) return;
-  if (strcmp(replacee, "$LIB") == 0)
+  if (lib_change_count == 0)
   {
-    /* change_count == 0 && replacee == $LIB */
-    if ((sizeof(void*)) == 8) strcpy(replacer, "lib64"); /* default $LIB if findmyso__get_lib_or_platform doesn't work */
-    else strcpy(replacer, "lib");
-    return;
+    if ((sizeof(void*)) == 8) strcpy(lib, "lib64"); /* default $LIB if findmyso__get_lib_or_platform doesn't work */
+    else strcpy(lib, "lib");
+#if (FINDMYSO_WARNING_LEVEL > 1)
+    char comment[512];
+    sprintf(comment, "/* assuming $LIB is %s */\n", lib);
+    rval= findmyso_strcat(buffer, buffer_length, comment, buffer_max_length);
+    if (rval != FINDMYSO_OK) return rval;
+#endif
   }
 
-  /* change_count == 0 && replacee == $PLATFORM */
+  if (platform_change_count == 0)
   {
     char buffer_for_replacement[FINDMYSO_MAX_PATH_LENGTH + 1]= "?";
     FILE *fp= popen("LD_LIBRARY_PATH= LD_DEBUG= LD_PRELOAD= uname -m 2>/dev/null", "r");
@@ -677,6 +736,13 @@ void findmyso_get_lib_or_platform(const char* replacee, char *replacer)
     }
     char* pointer_to_n= strchr(buffer_for_replacement, '\n');
     if (pointer_to_n != NULL) *pointer_to_n= '\0';
-    strcpy(replacer, buffer_for_replacement);
+    strcpy(platform, buffer_for_replacement);
+#if (FINDMYSO_WARNING_LEVEL > 1)
+    char comment[512];
+    sprintf(comment, "/* assuming $PLATFORM is %s */\n", platform);
+    rval= findmyso_strcat(buffer, buffer_length, comment, buffer_max_length);
+    if (rval != FINDMYSO_OK) return rval;
+#endif
   }
+  return rval;
 }

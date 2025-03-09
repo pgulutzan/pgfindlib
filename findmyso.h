@@ -28,8 +28,8 @@ extern int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_l
 #define FINDMYSO_ERROR_NULL -2
 #define FINDMYSO_ERROR_MAX_PATH_LENGTH_TOO_SMALL -3
 
-#ifndef FINDMYSO_INCLUDE_COMMENTS
-#define FINDMYSO_INCLUDE_COMMENTS 1
+#ifndef FINDMYSO_WARNING_LEVEL
+#define FINDMYSO_WARNING_LEVEL 4
 #endif
 
 #ifndef FINDMYSO_INCLUDE_LD_AUDIT
@@ -76,6 +76,6 @@ extern int findmyso(const char *sonames, char *buffer, unsigned int buffer_max_l
 
 #define FINDMYSO_VERSION_MAJOR 0
 #define FINDMYSO_VERSION_MINOR 9
-#define FINDMYSO_VERSION_PATCH 2
+#define FINDMYSO_VERSION_PATCH 3
 
 #endif

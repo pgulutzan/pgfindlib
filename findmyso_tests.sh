@@ -614,6 +614,11 @@ else
    echo "  Found no library -- Good."; let "good_count=good_count+1"
 fi
 
+export LD_LIBRARY_PATH='$LIB/wombat'
+printf "$LD_LIBRARY_PATH"
+result=$(/tmp/findmyso_tests/test)
+echo "$result"
+
 #Cleanup by cd back to /tmp and destroying all files in findmyso_tests.
 #cd ..
 #rm -r -f /tmp/findmyso_tests
