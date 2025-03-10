@@ -532,8 +532,7 @@ int findmyso_replace_lib_or_platform_or_origin(char* one_library_or_file, unsign
 }
 
 /*
-  Pass: "$LIB" or "$PLATFORM"
-  Return: replacer has what would loader would change "$LIB" or "$PLATFORM" or "$ORIGIN" to
+  Return: what would loader would change "$LIB" or "$PLATFORM" or "$ORIGIN" to
   Re method: Use a dummy utility, preferably bin/true, ls should also work but isn't as good
             (any program anywhere will provided it requires any .so, and libc.so is such).
             First attempt: read ELF to get "ELF interpreter" i.e. loader name,
@@ -541,6 +540,7 @@ int findmyso_replace_lib_or_platform_or_origin(char* one_library_or_file, unsign
             then use it with LD_DEBUG to see search_path when executing the dummy utility.
             If that fails: same idea but just running the dummy.
             If that fails: (lib) lib64 for 64-bit, lib for 32-bit. (platform) uname -m.
+            FreeBSD is different.
   Todo: get PT_DYNAMIC the way we get PT_INTERN, instead of depending on extern _DYNAMIC
   Todo: If there is a /tls (thread local storage) subdirectory or an x86_64 subdirectory,
         search all. But show library search path=main, main-tls, main/x86_64
@@ -549,17 +549,26 @@ int findmyso_replace_lib_or_platform_or_origin(char* one_library_or_file, unsign
 int findmyso_get_origin_and_lib_and_platform(char* origin, char* lib, char* platform,
                                               char* buffer, unsigned int* buffer_length, unsigned int buffer_max_length)
 {
-  int lib_change_count= 0;
   int platform_change_count= 0;
   int rval= FINDMYSO_OK;
 
+#ifdef FINDMYSO_FREEBSD
+  int aux_info_return= elf_aux_info(AT_EXECPATH, origin, FINDMYSO_MAX_PATH_LENGTH);
+  if (aux_info_return != 0)
+  {
+#if (FINDMYSO_WARNING_LEVEL > 1)
+    rval= findmyso_strcat(buffer, buffer_length, "/* elf_aux_info failed so $ORIGIN is unknown */\n", buffer_max_length);
+    if (rval != FINDMYSO_OK) return rval;
+#endif
+    strcpy(origin, "");
+  }
+  strcpy(lib, "lib");
+  /* platform should be set after the if/else/endif */
+#else /* the endif for this else is just before "if (platform_change_count == 0)" */
+  int lib_change_count= 0;
   {
     int readlink_return;
-#ifdef FINDMYSO_FREEBSD
-    readlink_return= elf_aux_info(AT_EXECPATH, origin, FINDMYSO_MAX_PATH_LENGTH);
-#else
     readlink_return= readlink("/proc/self/exe", origin, FINDMYSO_MAX_PATH_LENGTH);
-#endif
     if ((readlink_return < 0) || (readlink_return >= FINDMYSO_MAX_PATH_LENGTH))
     {
 #if (FINDMYSO_WARNING_LEVEL > 1)
@@ -727,6 +736,7 @@ extern void* __executable_start;
     if (rval != FINDMYSO_OK) return rval;
 #endif
   }
+#endif //ifdef FINDMYSO_FREEBSD ... else ... */
 
   if (platform_change_count == 0)
   {
@@ -735,9 +745,16 @@ extern void* __executable_start;
     if (fp != NULL)
     {
       if (fgets(buffer_for_replacement, sizeof(buffer_for_replacement), fp) == NULL)
-        strcpy(buffer_for_replacement, "?");
+        ;
       pclose(fp);
     }
+#if (FINDMYSO_WARNING_LEVEL > 1)
+    if (strcmp(buffer_for_replacement, "?") == 0)
+    {
+      rval= findmyso_strcat(buffer, buffer_length, "/* uname -m failed */", buffer_max_length);
+      if (rval != FINDMYSO_OK) return rval;
+    }
+#endif
     char* pointer_to_n= strchr(buffer_for_replacement, '\n');
     if (pointer_to_n != NULL) *pointer_to_n= '\0';
     strcpy(platform, buffer_for_replacement);
@@ -748,5 +765,5 @@ extern void* __executable_start;
     if (rval != FINDMYSO_OK) return rval;
 #endif
   }
-  return rval;
+  return rval; /* which is doubtless FINDMYSO_OK */
 }
