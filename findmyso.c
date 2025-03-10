@@ -695,7 +695,7 @@ extern void* __executable_start;
           ++change_count;
           break;
         }
-        fclose(fp);
+        pclose(fp);
       }
       /* second attempt */
       if (change_count == 0)
@@ -719,7 +719,7 @@ extern void* __executable_start;
             else { memcpy(platform, pre_ookpik, len); *(platform + len)= '\0'; ++platform_change_count; }
             break;
           }
-          fclose(fp);
+          pclose(fp);
         }
       }
     }
