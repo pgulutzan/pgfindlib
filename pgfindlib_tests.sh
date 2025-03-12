@@ -1,4 +1,4 @@
-#findmyso_tests.h -- Test effects of flags + environment with Linux .so libraries.
+#pgfindlib_tests.h -- Test effects of flags + environment with Linux .so libraries.
 #
 #
 #Copyright (c) 2025 by Peter Gulutzan.
@@ -30,11 +30,11 @@
 #!/bin/bash
 #Comments:
 #  Required utilities: linux, bash, sed, gcc
-#  Required permissions: to create/modify/destroy files and directories in /tmp/findmyso_tests
-#  This creates small files in /tmp/findmyso_tests and destroys everything in /tmp/findmyso_tests. 
+#  Required permissions: to create/modify/destroy files and directories in /tmp/pgfindlib_tests
+#  This creates small files in /tmp/pgfindlib_tests and destroys everything in /tmp/pgfindlib_tests. 
 #  To run:
-#    chmod +x findmyso_tests.sh
-#    ./findmyso_tests.sh
+#    chmod +x pgfindlib_tests.sh
+#    ./pgfindlib_tests.sh
 
 #The 27 tests here involve combinations of gcc flags, LD_LIBRARY_PATH, LD_RUN_PATH, and LD_PRELOAD.
 #They should all work, i.e. printf "Good".
@@ -45,7 +45,7 @@
 #this will display the directory that LD_PRELOAD mentions, showing it has priority.
 #There is no testing of ld.so.cache, of $LIB, of $PLATFORM, or of flags other than dtags flags.
 #There is no testing with LD_AUDIT, it is unset at the start.
-#The LD_PRELOAD testing is always done in combination with gcc ...  -Wl,-rpath,/tmp/findmyso_tests for unknown reasons.
+#The LD_PRELOAD testing is always done in combination with gcc ...  -Wl,-rpath,/tmp/pgfindlib_tests for unknown reasons.
 #The results do not contradict the Linux documentation, but hopefully:
 #1. Demonstrate that the Linux documentation is correct even though it may seem hard to follow.
 #2. Correct misimpressions caused by incomplete statements made on stackoverflow, vendor manuals, etc.
@@ -57,15 +57,15 @@
 
 unset LD_PRELOAD; unset LD_LIBRARY_PATH; unset LD_RUN_PATH; unset LD_AUDIT
 
-printf "findmyso_tests.h -- Test effects of flags + environment with Linux .so libraries.\n"
-printf "For explanation read the comments inside findmyso.c findmyso_tests.sh\n"
-printf "This creates small files in /tmp/findmyso_tests and destroys everything in /tmp/findmyso_tests.\n"
+printf "pgfindlib_tests.h -- Test effects of flags + environment with Linux .so libraries.\n"
+printf "For explanation read the comments inside pgfindlib.c pgfindlib_tests.sh\n"
+printf "This creates small files in /tmp/pgfindlib_tests and destroys everything in /tmp/pgfindlib_tests.\n"
 read -p "Type Y to continue, or anything else to exit. " yn
 if [[ "$yn" != "Y" ]]; then exit; fi
 
-rm -r -f /tmp/findmyso_tests || { echo "rm -r -f /tmp/findmyso_tests failed so execution cannot continue" && return 1; }
-mkdir /tmp/findmyso_tests || { echo "mkdir /tmp/findmyso_tests failed so execution cannot continue" && return 1; }
-cd /tmp/findmyso_tests
+rm -r -f /tmp/pgfindlib_tests || { echo "rm -r -f /tmp/pgfindlib_tests failed so execution cannot continue" && return 1; }
+mkdir /tmp/pgfindlib_tests || { echo "mkdir /tmp/pgfindlib_tests failed so execution cannot continue" && return 1; }
+cd /tmp/pgfindlib_tests
 
 
 #Create shared_library.h
@@ -101,75 +101,75 @@ gcc -c -Wall -Werror -fpic shared_library.c
 gcc -shared -o libshared_library.so shared_library.o
 
 #Compile main with executable name = test
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
 
 #Create subdirectories A B C D (not E) and put libshared_library.so in them
 
-mkdir /tmp/findmyso_tests/A
+mkdir /tmp/pgfindlib_tests/A
  sed -i 's/** !/** A/g' shared_library.c
  gcc -c -Wall -Werror -fpic shared_library.c
  gcc -shared -o libshared_library.so shared_library.o
- cp libshared_library.so /tmp/findmyso_tests/A/libshared_library.so
+ cp libshared_library.so /tmp/pgfindlib_tests/A/libshared_library.so
 
-mkdir /tmp/findmyso_tests/B
+mkdir /tmp/pgfindlib_tests/B
  sed -i 's/** A/** B/g' shared_library.c
  gcc -c -Wall -Werror -fpic shared_library.c
  gcc -shared -o libshared_library.so shared_library.o
- cp libshared_library.so /tmp/findmyso_tests/B/libshared_library.so
+ cp libshared_library.so /tmp/pgfindlib_tests/B/libshared_library.so
 
-mkdir /tmp/findmyso_tests/C
+mkdir /tmp/pgfindlib_tests/C
  sed -i 's/** B/** C/g' shared_library.c
  gcc -c -Wall -Werror -fpic shared_library.c
  gcc -shared -o libshared_library.so shared_library.o
- cp libshared_library.so /tmp/findmyso_tests/C/libshared_library.so
+ cp libshared_library.so /tmp/pgfindlib_tests/C/libshared_library.so
 
-mkdir /tmp/findmyso_tests/D
+mkdir /tmp/pgfindlib_tests/D
  sed -i 's/** C/** D/g' shared_library.c
  gcc -c -Wall -Werror -fpic shared_library.c
  gcc -shared -o libshared_library.so shared_library.o
- cp libshared_library.so /tmp/findmyso_tests/D/libshared_library.so
+ cp libshared_library.so /tmp/pgfindlib_tests/D/libshared_library.so
 
 #Create subdirectory E A
-mkdir "/tmp/findmyso_tests/E A"
+mkdir "/tmp/pgfindlib_tests/E A"
  sed -i 's/** D/** E A/g' shared_library.c
  gcc -c -Wall -Werror -fpic shared_library.c
  gcc -shared -o libshared_library.so shared_library.o
- cp libshared_library.so "/tmp/findmyso_tests/E A/libshared_library.so"
+ cp libshared_library.so "/tmp/pgfindlib_tests/E A/libshared_library.so"
 
 #Create subdirectory F and put libshared_library.so + variants in it
-mkdir /tmp/findmyso_tests/F
+mkdir /tmp/pgfindlib_tests/F
  sed -i 's/** E A/** F .so/g' shared_library.c
  gcc -c -Wall -Werror -fpic shared_library.c
  gcc -shared -o libshared_library.so shared_library.o
- cp libshared_library.so /tmp/findmyso_tests/F/libshared_library.so
+ cp libshared_library.so /tmp/pgfindlib_tests/F/libshared_library.so
  sed -i 's/** F .so/** F .so.21/g' shared_library.c
  gcc -c -Wall -Werror -fpic shared_library.c
  gcc -shared -o libshared_library.so shared_library.o
- cp libshared_library.so /tmp/findmyso_tests/F/libshared_library.so.21
+ cp libshared_library.so /tmp/pgfindlib_tests/F/libshared_library.so.21
  sed -i 's/** F .so.21/** F .so./g' shared_library.c
  gcc -c -Wall -Werror -fpic shared_library.c
  gcc -shared -o libshared_library.so shared_library.o
- cp libshared_library.so /tmp/findmyso_tests/F/libshared_library.so.
+ cp libshared_library.so /tmp/pgfindlib_tests/F/libshared_library.so.
  sed -i 's/** F .so./** F .so.100/g' shared_library.c
  gcc -c -Wall -Werror -fpic shared_library.c
  gcc -shared -o libshared_library.so shared_library.o
- cp libshared_library.so /tmp/findmyso_tests/F/libshared_library.so.100
+ cp libshared_library.so /tmp/pgfindlib_tests/F/libshared_library.so.100
 
 #Create subdirectory G and put something invalid in G/libshared_library.so
-mkdir /tmp/findmyso_tests/G
+mkdir /tmp/pgfindlib_tests/G
 echo '
 Junk
-' > /tmp/findmyso_tests/G/libshared_library.so
+' > /tmp/pgfindlib_tests/G/libshared_library.so
 
 #Create subdirectory H/H2 and 
-mkdir /tmp/findmyso_tests/H
-mkdir /tmp/findmyso_tests/H/H2
+mkdir /tmp/pgfindlib_tests/H
+mkdir /tmp/pgfindlib_tests/H/H2
  sed -i 's/** F .so.100/** H2/g' shared_library.c
  gcc -c -Wall -Werror -fpic shared_library.c
  gcc -shared -o libshared_library.so shared_library.o
- cp libshared_library.so /tmp/findmyso_tests/H/H2/libshared_library.so
+ cp libshared_library.so /tmp/pgfindlib_tests/H/H2/libshared_library.so
 
-#Still on /tmp/findmyso_tests the printf should be !
+#Still on /tmp/pgfindlib_tests the printf should be !
  sed -i 's/** H2/** !/g' shared_library.c
  gcc -c -Wall -Werror -fpic shared_library.c
  gcc -shared -o libshared_library.so shared_library.o
@@ -185,8 +185,8 @@ printf "Test #1 -- with no non-default flags or environment variables\n"
 printf "  (Default means gcc with no rpath, LD_LIBRARY_PATH + LD_RUN_PATH + LD_PRELOAD unset.)\n"
 printf "  Result should be: Found no library.\n"
 unset LD_LIBRARY_PATH; unset LD_RUN_PATH; unset LD_PRELOAD
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** A" ]]; then
    echo "  Found library A-- Bad."; let "bad_count=bad_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -198,9 +198,9 @@ fi
 printf "Test #2 -- with LD_LIBRARY_PATH to A\n"
 printf "  Result should be: Found library A, showing LD_LIBRARY_PATH has effect.\n"
 unset LD_LIBRARY_PATH; unset LD_RUN_PATH; unset LD_PRELOAD
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
-export LD_LIBRARY_PATH=/tmp/findmyso_tests/A
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
+export LD_LIBRARY_PATH=/tmp/pgfindlib_tests/A
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** A" ]]; then
    echo "  Found library A -- Good."; let "good_count=good_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -214,9 +214,9 @@ printf "  Result should be: Found library A, because:\n"
 printf "  Nowadays gcc thinks --enable-new-dtag is default so -rpath affects DT_RUNPATH,\n"
 printf "  and DT_RUNPATH is lower priority than LD_LIBRARY_PATH.\n"
 unset LD_LIBRARY_PATH; unset LD_RUN_PATH; unset LD_PRELOAD
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library -Wl,-rpath,/tmp/findmyso_tests/E,-rpath,/tmp/findmyso_tests/B
-export LD_LIBRARY_PATH=/tmp/findmyso_tests/A
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library -Wl,-rpath,/tmp/pgfindlib_tests/E,-rpath,/tmp/pgfindlib_tests/B
+export LD_LIBRARY_PATH=/tmp/pgfindlib_tests/A
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** A" ]]; then
    echo "  Found library A -- Good."; let "good_count=good_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -231,9 +231,9 @@ printf "  The blank library E is skipped\n"
 printf "  --enable-new-dtag is disabled so -rpath affects DT_RPATH,\n"
 printf "  and DT_RPATH is higher priority than LD_LIBRARY_PATH.\n"
 unset LD_LIBRARY_PATH; unset LD_RUN_PATH; unset LD_PRELOAD
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library -Wl,-rpath,/tmp/findmyso_tests/E,-rpath,/tmp/findmyso_tests/B,-disable-new-dtag
-export LD_LIBRARY_PATH=/tmp/findmyso_tests/A
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library -Wl,-rpath,/tmp/pgfindlib_tests/E,-rpath,/tmp/pgfindlib_tests/B,-disable-new-dtag
+export LD_LIBRARY_PATH=/tmp/pgfindlib_tests/A
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** B" ]]; then
    echo "  Found library B -- Good."; let "good_count=good_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -250,9 +250,9 @@ printf "  There are statements that DT_RPATH searching is recursive, but in this
 printf "  recursive doesn't mean search subdirectories as one would do for ls -R,\n"
 printf "  rather it apparently means: if .so #1 depends on .so #2 there will be a search for .so #2.\n"
 unset LD_LIBRARY_PATH; unset LD_RUN_PATH; unset LD_PRELOAD
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library -Wl,-rpath,/tmp/findmyso_tests/E,-rpath,/tmp/findmyso_tests/H,-disable-new-dtag
-export LD_LIBRARY_PATH=/tmp/findmyso_tests/B
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library -Wl,-rpath,/tmp/pgfindlib_tests/E,-rpath,/tmp/pgfindlib_tests/H,-disable-new-dtag
+export LD_LIBRARY_PATH=/tmp/pgfindlib_tests/B
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** B" ]]; then
    echo "  Found library B -- Good."; let "good_count=good_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -264,9 +264,9 @@ fi
 printf "Test #6 -- with -rpath to E and B. new-dtag disabled explicitly, LD_LIBRARY_PATH to A after gcc.\n"
 printf "  Result should be: B, because: DT_RPATH has both E and B, but E is blank so it is skipped.\n"
 unset LD_LIBRARY_PATH; unset LD_RUN_PATH; unset LD_PRELOAD
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library -Wl,-rpath,/tmp/findmyso_tests/E,-rpath,/tmp/findmyso_tests/B,-disable-new-dtag
-export LD_LIBRARY_PATH=/tmp/findmyso_tests/A
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library -Wl,-rpath,/tmp/pgfindlib_tests/E,-rpath,/tmp/pgfindlib_tests/B,-disable-new-dtag
+export LD_LIBRARY_PATH=/tmp/pgfindlib_tests/A
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** B" ]]; then
    echo "  Found library B -- Good."; let "good_count=good_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -278,11 +278,11 @@ fi
 printf "Test #7 -- -rpath to A, LD_LIBRARY_PATH to B. LD_RUN_PATH to C. LD_PRELOAD to D (after gcc).\n"
 printf "  Result should be: D, because LD_PRELOAD has higher priority than all the others.\n"
 unset LD_LIBRARY_PATH; unset LD_RUN_PATH; unset LD_PRELOAD
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library -Wl,-rpath,/tmp/findmyso_tests/A,-disable-new-dtag
-export LD_LIBRARY_PATH=/tmp/findmyso_tests/B
-export LD_RUN_PATH=/tmp/findmyso_tests/C
-export LD_PRELOAD=/tmp/findmyso_tests/D/libshared_library.so
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library -Wl,-rpath,/tmp/pgfindlib_tests/A,-disable-new-dtag
+export LD_LIBRARY_PATH=/tmp/pgfindlib_tests/B
+export LD_RUN_PATH=/tmp/pgfindlib_tests/C
+export LD_PRELOAD=/tmp/pgfindlib_tests/D/libshared_library.so
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** D" ]]; then
    echo "  Found library D -- Good."; let "good_count=good_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -295,10 +295,10 @@ printf "Test #8 -- LD_LIBRARY_PATH to E. LD_RUN_PATH to D and C (after gcc).\n"
 printf "  Result should be: Found no library, because LD_RUN_PATH has no effect at runtime.\n"
 printf "  (Apparently it does in some places, but not with Linux and gcc.)\n"
 unset LD_LIBRARY_PATH; unset LD_RUN_PATH; unset LD_PRELOAD
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
-export LD_LIBRARY_PATH=/tmp/findmyso_tests/E
-export LD_RUN_PATH=/tmp/findmyso_tests/D:/tmp/findmyso_tests/C
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
+export LD_LIBRARY_PATH=/tmp/pgfindlib_tests/E
+export LD_RUN_PATH=/tmp/pgfindlib_tests/D:/tmp/pgfindlib_tests/C
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** D" ]]; then
    echo "  Found library D -- Bad."; let "bad_count=bad_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -312,10 +312,10 @@ printf "  Result should be: A, because:\n"
 printf "  although LD_RUN_PATH has no effect if it's set after gcc,\n"
 printf "  it does have effect if it's set before gcc, i.e. it's part of the building.\n"
 unset LD_LIBRARY_PATH; unset LD_RUN_PATH; unset LD_PRELOAD
-export LD_RUN_PATH='/tmp/findmyso_tests/E:/tmp/findmyso_tests/A'
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
-export LD_RUN_PATH=/tmp/findmyso_tests/D:/tmp/findmyso_tests/C
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+export LD_RUN_PATH='/tmp/pgfindlib_tests/E:/tmp/pgfindlib_tests/A'
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
+export LD_RUN_PATH=/tmp/pgfindlib_tests/D:/tmp/pgfindlib_tests/C
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** A" ]]; then
    echo "  Found library A -- Good."; let "good_count=good_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -327,10 +327,10 @@ fi
 printf "Test #10 -- LD_LIBRARY_PATH to F.\n"
 printf "  Result should be: F .so. This was just to check the loader only looks at .so and not .so*.\n"
 unset LD_LIBRARY_PATH; unset LD_RUN_PATH; unset LD_PRELOAD
-export LD_LIBRARY_PATH='/tmp/findmyso_tests/F'
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
-export LD_RUN_PATH=/tmp/findmyso_tests/D:/tmp/findmyso_tests/C
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+export LD_LIBRARY_PATH='/tmp/pgfindlib_tests/F'
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
+export LD_RUN_PATH=/tmp/pgfindlib_tests/D:/tmp/pgfindlib_tests/C
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** F .so" ]]; then
    echo "  Found library F .so -- Good."; let "good_count=good_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -350,25 +350,25 @@ printf "  but they are not tested because the testing would require root privile
 printf "  See https://man7.org/linux/man-pages/man8/ld.so.8.html\n"
 unset LD_LIBRARY_PATH; unset LD_RUN_PATH; unset LD_PRELOAD; unset ORIGIN; unset LDFLAGS
 #Create subdirectory J and ensure library directory != executable directory
-cd /tmp/findmyso_tests
+cd /tmp/pgfindlib_tests
 cp shared_library.c shared_library.c.bak
 cp shared_library.o shared_library.o.bak
 cp libshared_library.so libshared_library.so.bak
-mkdir /tmp/findmyso_tests/J
-cp /tmp/findmyso_tests/shared_library.c /tmp/findmyso_tests/J/shared_library.c
-cp /tmp/findmyso_tests/shared_library.h /tmp/findmyso_tests/J/shared_library.h
-cp /tmp/findmyso_tests/main.c /tmp/findmyso_tests/J/main.c
-cd /tmp/findmyso_tests/J
-gcc -L/tmp/findmyso_tests -Wall  main.c -lshared_library -o test -Wl,-z,origin -Wl,-rpath,\$ORIGIN
+mkdir /tmp/pgfindlib_tests/J
+cp /tmp/pgfindlib_tests/shared_library.c /tmp/pgfindlib_tests/J/shared_library.c
+cp /tmp/pgfindlib_tests/shared_library.h /tmp/pgfindlib_tests/J/shared_library.h
+cp /tmp/pgfindlib_tests/main.c /tmp/pgfindlib_tests/J/main.c
+cd /tmp/pgfindlib_tests/J
+gcc -L/tmp/pgfindlib_tests -Wall  main.c -lshared_library -o test -Wl,-z,origin -Wl,-rpath,\$ORIGIN
 sed -i 's/** !/** J/g' shared_library.c
 gcc -c -Wall -Werror -fpic shared_library.c
 gcc -shared -o libshared_library.so shared_library.o
-cd /tmp/findmyso_tests
+cd /tmp/pgfindlib_tests
 cp libshared_library.so.bak libshared_library.so
 cp shared_library.o.bak shared_library.o
 cp shared_library.c.bak shared_library.c
-cd /tmp/findmyso_tests/B
-result=$(/tmp/findmyso_tests/J/test 2>/dev/null)
+cd /tmp/pgfindlib_tests/B
+result=$(/tmp/pgfindlib_tests/J/test 2>/dev/null)
 if [[ "$result" == "** J" ]]; then
    echo "  Found library J -- Good."; let "good_count=good_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -376,7 +376,7 @@ elif [[ "$result" > "** " ]]; then
 else
    echo "  Found no library-- Bad."; let "bad_count=bad_count+1"
 fi
-cd /tmp/findmyso_tests
+cd /tmp/pgfindlib_tests
 
 printf "Test #12 -- with LD_LIBRARY_PATH=G;A.\n"
 printf "  Result should be: Found no library, because the library in G is invalid,\n"
@@ -384,8 +384,8 @@ printf "  and when there is an error the loader does not continue to look for th
 printf "  LD_LIBRARY_PATH=G;A. LD_RUN_PATH unset. LD_PRELOAD unset. "
 unset LD_RUN_PATH; unset LD_PRELOAD
 export LD_LIBRARY_PATH='G;A'
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** A" ]]; then
    echo "  Found library A-- Bad."; let "bad_count=bad_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -399,9 +399,9 @@ printf "  Result should be: ! because .. means the directory above the current o
 printf "  (The test includes a cd to A after the gcc but before the execution.)\n"
 unset LD_RUN_PATH; unset LD_PRELOAD
 export LD_LIBRARY_PATH=..
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
-cd /tmp/findmyso_tests/A
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
+cd /tmp/pgfindlib_tests/A
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** !" ]]; then
    echo "  Found library !-- Good."; let "good_count=good_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -409,14 +409,14 @@ elif [[ "$result" > "** " ]]; then
 else
    echo "  Found no library -- Bad."; let "bad_count=bad_count+1"
 fi
-cd /tmp/findmyso_tests
+cd /tmp/pgfindlib_tests
 
 printf "Test #14 -- with LD_LIBRARY_PATH=E;A\n"
 printf "  Result should be: A because semicolon is a valid delimiter.\n"
 unset LD_RUN_PATH; unset LD_PRELOAD
 export LD_LIBRARY_PATH='E;A'
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** A" ]]; then
    echo "  Found library A-- Good."; let "good_count=good_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -429,8 +429,8 @@ printf "Test #15 -- with LD_LIBRARY_PATH=E:A\n"
 printf "  Result should be: A because colon is a valid delimiter.\n"
 unset LD_RUN_PATH; unset LD_PRELOAD
 export LD_LIBRARY_PATH='E:A'
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** A" ]]; then
    echo "  Found library A-- Good."; let "good_count=good_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -444,8 +444,8 @@ printf "Test #16 -- with LD_LIBRARY_PATH=E:E A\n"
 printf "  Result should be: Found library E A  because space is not a valid delimiter.\n"
 unset LD_RUN_PATH; unset LD_PRELOAD
 export LD_LIBRARY_PATH='E:E A'
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** E A" ]]; then
    echo "  Found library E A-- Good."; let "good_count=good_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -458,8 +458,8 @@ printf "Test #17 -- with LD_LIBRARY_PATH=E,A\n"
 printf "  Result should be: Found no library because comma is not a valid delimiter.\n"
 unset LD_RUN_PATH; unset LD_PRELOAD
 export LD_LIBRARY_PATH='E,A'
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** A" ]]; then
    echo "  Found library A-- Bad."; let "bad_count=bad_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -469,15 +469,15 @@ else
 fi
 
 #LD_PRELOAD cannot be relative, specify in full.
-#Also  -Wl,-rpath,/tmp/findmyso_tests is necessary.
+#Also  -Wl,-rpath,/tmp/pgfindlib_tests is necessary.
 #Also it has to happen after gcc, gcc can fail if LD_PRELOAD happens first.
 #Errors might be ignored.
 printf "Test #18 -- with LD_PRELOAD=A;A\n"
 printf "  Result should be: Found no library because semicolon is not a valid delimiter.\n"
 unset LD_RUN_PATH; unset LD_LIBRARY_PATH; unset LD_PRELOAD
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
-export LD_PRELOAD='/tmp/findmyso_tests/A/libshared_library.so;/tmp/findmyso_tests/A/libshared_library.so'
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
+export LD_PRELOAD='/tmp/pgfindlib_tests/A/libshared_library.so;/tmp/pgfindlib_tests/A/libshared_library.so'
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** A" ]]; then
    echo "  Found library A-- Bad."; let "bad_count=bad_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -489,9 +489,9 @@ fi
 printf "Test #19 -- with LD_PRELOAD=A:A"
 printf "  Result should be: A because colon is a valid delimiter.\n"
 unset LD_RUN_PATH; unset LD_LIBRARY_PATH; unset LD_PRELOAD
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library -Wl,-rpath,/tmp/findmyso_tests
-export LD_PRELOAD='/tmp/findmyso_tests/A/libshared_library.so:/tmp/findmyso_tests/A/libshared_library.so'
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library -Wl,-rpath,/tmp/pgfindlib_tests
+export LD_PRELOAD='/tmp/pgfindlib_tests/A/libshared_library.so:/tmp/pgfindlib_tests/A/libshared_library.so'
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** A" ]]; then
    echo "  Found library A-- Good."; let "good_count=good_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -503,9 +503,9 @@ fi
 printf "Test #20 -- with LD_PRELOAD=E A\n"
 printf "  Result should be: Found Library A because space is a valid delimiter.\n"
 unset LD_RUN_PATH; unset LD_LIBRARY_PATH; unset LD_PRELOAD
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library -Wl,-rpath,/tmp/findmyso_tests
-export LD_PRELOAD='/tmp/findmyso_tests/E/libshared_library.so /tmp/findmyso_tests/E A/libshared_library.so'
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library -Wl,-rpath,/tmp/pgfindlib_tests
+export LD_PRELOAD='/tmp/pgfindlib_tests/E/libshared_library.so /tmp/pgfindlib_tests/E A/libshared_library.so'
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** A" ]]; then
    echo "  Found library A-- Good."; let "good_count=good_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -517,9 +517,9 @@ fi
 printf "Test #21 -- with LD_PRELOAD=E:E A\n"
 printf "  Result should be: Found no library because space is a valid delimiter.\n"
 unset LD_RUN_PATH; unset LD_LIBRARY_PATH; unset LD_PRELOAD
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
-export LD_PRELOAD='/tmp/findmyso_tests/E: /tmp/findmyso_tests/E A'
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
+export LD_PRELOAD='/tmp/pgfindlib_tests/E: /tmp/pgfindlib_tests/E A'
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** E A" ]]; then
    echo "  Found library E A-- Bad."; let "bad_count=bad_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -532,9 +532,9 @@ printf "Test #22 -- with LD_PRELOAD=A,A\n"
 printf "  Result should be: Found ! because comma is not a valid delimiter.\n"
 printf "  (In this case the error is ignored so the .so in the -rpath is loaded.)\n"
 unset LD_RUN_PATH; unset LD_LIBRARY_PATH; unset LD_PRELOAD
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library -Wl,-rpath,/tmp/findmyso_tests
-export LD_PRELOAD='/tmp/findmyso_tests/A/libshared_library.so,/tmp/findmyso_tests/A/libshared_library.so'
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library -Wl,-rpath,/tmp/pgfindlib_tests
+export LD_PRELOAD='/tmp/pgfindlib_tests/A/libshared_library.so,/tmp/pgfindlib_tests/A/libshared_library.so'
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** !" ]]; then
    echo "  Found library !-- Good."; let "good_count=good_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -547,8 +547,8 @@ printf "Test #23 -- with LD_RUN_PATH=E;A\n"
 printf "  Result should be: Found no library because semicolon is not a valid delimiter.\n"
 unset LD_LIBRARY_PATH; unset LD_PRELOAD
 export LD_RUN_PATH='E;A'
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** A" ]]; then
    echo "  Found library A-- Bad."; let "bad_count=bad_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -561,8 +561,8 @@ printf "Test #24 -- with LD_RUN_PATH=E:A\n"
 printf "  Result should be: A because colon is a valid delimiter.\n"
 unset LD_LIBRARY_PATH; unset LD_PRELOAD
 export LD_RUN_PATH='E:A'
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** A" ]]; then
    echo "  Found library A-- Good."; let "good_count=good_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -575,8 +575,8 @@ printf "Test #25 -- with LD_RUN_PATH=E:E A\n"
 printf "  Result should be: Found library E A because space is not a valid delimiter.\n"
 unset LD_LIBRARY_PATH; unset LD_PRELOAD
 export LD_RUN_PATH="E:E A"
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** E A" ]]; then
    echo "  Found library E A-- Good."; let "good_count=good_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -590,8 +590,8 @@ printf "Test #26 -- with LD_RUN_PATH=E,A\n"
 printf "  Result should be: Found no library because comma is not a valid delimiter.\n"
 unset unset LD_PRELOAD: unset LD_LIBRARY_PATH
 export LD_RUN_PATH='E,A'
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** A" ]]; then
    echo "  Found library A-- Bad."; let "bad_count=bad_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -603,9 +603,9 @@ fi
 printf "Test #27 -- with LD_LIBRARY_PATH=' '\n"
 printf "  Result should be: Found no library though blank doesn't mean unset.\n"
 unset LD_RUN_PATH; unset LD_PRELOAD; unset LD_LIBRARY_PATH
-gcc -L/tmp/findmyso_tests -Wall -o test main.c -lshared_library
+gcc -L/tmp/pgfindlib_tests -Wall -o test main.c -lshared_library
 export LD_LIBRARY_PATH=''
-result=$(/tmp/findmyso_tests/test 2>/dev/null)
+result=$(/tmp/pgfindlib_tests/test 2>/dev/null)
 if [[ "$result" == "** A" ]]; then
    echo "  Found library A-- Bad."; let "bad_count=bad_count+1"
 elif [[ "$result" > "** " ]]; then
@@ -616,12 +616,12 @@ fi
 
 export LD_LIBRARY_PATH='$LIB/wombat'
 printf "$LD_LIBRARY_PATH"
-result=$(/tmp/findmyso_tests/test)
+result=$(/tmp/pgfindlib_tests/test)
 echo "$result"
 
-#Cleanup by cd back to /tmp and destroying all files in findmyso_tests.
+#Cleanup by cd back to /tmp and destroying all files in pgfindlib_tests.
 #cd ..
-#rm -r -f /tmp/findmyso_tests
+#rm -r -f /tmp/pgfindlib_tests
 
 echo "Good: $good_count"
 echo "Bad: $bad_count"
