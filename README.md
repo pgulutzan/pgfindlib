@@ -144,7 +144,7 @@ If everything fails, there will be a comment.</P>
 <H3 id="Re extra_paths">Re extra_paths</H3><HR>
 <P>This is another colon-or-semicolon-delimited string that can contain more paths that will be added at the end.
 For example ./main libcrypto.so /lib/x86_64-linux-gnu/ will pass "/lib/x86_64-linux-gnu/" as the final
-argument to libmyso(), and buffer will get a list of any qualifying .so files in /lib/x86_64-linux-gnu.
+argument to pgfindlib(), and buffer will get a list of any qualifying .so files in /lib/x86_64-linux-gnu.
 The loader knows nothing about the items in this section, it's informative.</P>
 
 <H3 id="Re order of execution">Re order of execution</H3><HR>
@@ -179,7 +179,7 @@ The results are what's expected for the platform but we do not search /tls or pl
 If the path is blank or there's a trailing : we do not treat it as "." which seems to be how loader handles it.</P>
 
 <H3 id="Re ldconfig -p and uname -m">Re ldconfig -p and uname -m</H3><HR>
-<P>These are very common, so one assmes that they're in the usual places and invokes them via popen().
+<P>These are very common, so one assumes that they're in the usual places and invokes them via popen().
 If the call fails then there's no output and no error.
 There's an assumption that ldconfig -p output looks the same on every Linux distro, which is undocumented,
 and in fact the format on FreeBSD with ldconfig -r is quite different, but still okay.
@@ -235,6 +235,6 @@ gcc -o main main.c pgfindlib.c -DPGFINDLIB_WARNING_LEVEL=1 -Wl,-z,origin,-rpath,
 
 <H3 id="Contacts">Contacts</H3><HR>
 <P>GitHub. https://github.com/pgulutzan/pgfindlib
-This is where the sources of libmyso are, so use get clone to get them initially.
+This is where the sources of pgfindlib are, so use get clone to get them initially.
 The pgfindlib repository is also the place to put error reports, or just click "Like".
 </P>
