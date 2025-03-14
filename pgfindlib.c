@@ -2,8 +2,8 @@
   pgfindlib.c --   To get a list of paths and .so files along
   ld_audit + ld_preload + -rpath (dt_rpath) + ld_library_path + -rpath (dt_run_path) + ld_run_path + /etc/ld.so.cache + extra-paths
 
-   Version: 0.9.4
-   Last modified: March 12 2025
+   Version: 0.9.5
+   Last modified: March 13 2025
 
   Copyright (c) 2025 by Peter Gulutzan. All rights reserved.
 
@@ -299,6 +299,16 @@ int pgfindlib(const char *sonames, char *buffer, unsigned int buffer_max_length,
   }
 #endif /* #if (PGFINDLIB_INCLUDE_LD_SO_CACHE == 1) */
 
+#if (PGFINDLIB_INCLUDE_DEFAULT_PATHS == 1)
+#if (PGFINDLIB_WARNING_LEVEL > 2)
+  rval= pgfindlib_strcat(buffer, &buffer_length, "/* default paths */\n", buffer_max_length);
+  if (rval != PGFINDLIB_OK) return rval;
+#endif
+  char system_libraries[]="/lib:/lib64:/usr/lib:/usr/lib64"; /* "lib64" is platform-dependent but dunno which platform */
+  rval= pgfindlib_libraries_or_files(sonames, system_libraries, buffer, &buffer_length, "default paths", buffer_max_length, lib, platform, origin);
+  if (rval != PGFINDLIB_OK) return rval;
+#endif /* #if (PGFINDLIB_INCLUDE_DEFAULT_PATHS == 1) */
+
 #if (PGFINDLIB_INCLUDE_EXTRA_PATHS == 1)
   {
     if (extra_paths != NULL)
@@ -328,13 +338,17 @@ int pgfindlib_libraries_or_files(const char *sonames, const char *librarylist, c
 {
   int rval;
   char delimiter1, delimiter2;
+  ino_t inode_list[PGFINDLIB_MAX_INODE_COUNT]; /* ino_t is defined for dirent items */
+  unsigned int inode_count= 0;
+  unsigned int inode_warning_count= 0;
+
   if (strcmp(type, "LD_AUDIT") == 0)        { delimiter1= ':'; delimiter2= ':'; } /* colon or colon */
   else if (strcmp(type, "LD_PRELOAD") == 0)      { delimiter1= ':'; delimiter2= ' '; } /* colon or space */
   else if (strcmp(type, "DT_RPATH") == 0)        { delimiter1= ':'; delimiter2= ':'; } /* colon or colon */
   else if (strcmp(type, "LD_LIBRARY_PATH") == 0) { delimiter1= ':'; delimiter2= ';'; } /* colon or semicolon */
   else if (strcmp(type, "DT_RUNPATH") == 0)      { delimiter1= ':'; delimiter2= ':'; } /* colon or colon */
   else if (strcmp(type, "LD_RUN_PATH") == 0)     { delimiter1= ':'; delimiter2= ':'; } /* colon or colon */
-  else /* extra_paths */                         { delimiter1= ':'; delimiter2= ';'; } /* colon or semicolon */
+  else /* system libraries or extra_paths */     { delimiter1= ':'; delimiter2= ';'; } /* colon or semicolon */
   char one_library_or_file[PGFINDLIB_MAX_PATH_LENGTH + 1];
   char *p_out= &one_library_or_file[0];
   const char *p_in= librarylist;
@@ -398,6 +412,48 @@ int pgfindlib_libraries_or_files(const char *sonames, const char *librarylist, c
             {
               if ((dirent->d_type !=  DT_REG) &&  (dirent->d_type !=  DT_LNK)) continue; /* not regular file or symbolic link */
               if (pgfindlib_find_line_in_sonames(sonames, dirent->d_name) == 0) continue; /* doesn't match requirement */
+              if (dirent->d_type == DT_LNK)
+              {
+#if (PGFINDLIB_INCLUDE_SYMLINKS == 0)
+                continue;
+#endif
+#if (PGFINDLIB_WARNING_LEVEL > 2)
+                rval= pgfindlib_strcat(buffer, buffer_length, "/* following item is a symlink */\n", buffer_max_length);
+                if (rval != PGFINDLIB_OK) return rval;
+#endif
+              }
+              ino_t inode_duplicate= -1;
+              for (unsigned int i= 0; i < inode_count; ++i)
+              {
+                if (inode_list[i] == dirent->d_ino) inode_duplicate= i;
+              }
+              if (inode_duplicate == -1)
+              {
+                if (inode_count == PGFINDLIB_MAX_INODE_COUNT)
+#if (PGFINDLIB_WARNING_LEVEL > 1)
+                {
+                  if (inode_warning_count == 0)
+                  {
+                    rval= pgfindlib_strcat(buffer, buffer_length, "/* PGFINDLIB_MAX_INODE_COUNT is too small */\n", buffer_max_length);
+                    if (rval != PGFINDLIB_OK) return rval;
+                  }
+                  ++inode_warning_count;
+                }
+#endif
+                if (inode_count != PGFINDLIB_MAX_INODE_COUNT) inode_list[inode_count++]= dirent->d_ino;
+              }
+              if (inode_duplicate != -1)
+              {
+#if (PGFINDLIB_INCLUDE_HARDLINKS == 0)
+                continue;
+#endif
+#if (PGFINDLIB_WARNING_LEVEL > 2)
+                char comment[128];
+                sprintf(comment, "/* following item is a hardlink (same inode as item %ld in this group) */\n", inode_duplicate + 1);
+                rval= pgfindlib_strcat(buffer, buffer_length, comment, buffer_max_length);
+                if (rval != PGFINDLIB_OK) return rval;
+#endif
+              }
               {
                 rval= pgfindlib_strcat(buffer, buffer_length, one_library_or_file, buffer_max_length);
                 if (rval != PGFINDLIB_OK) return rval;
@@ -483,9 +539,11 @@ int pgfindlib_find_line_in_sonames(const char *sonames, const char *line)
 
 /*
   Pass: library or file name
-  Do: replace with same library or file name, except that $ORIGIN or $LIB or $PLATFORM are replaced
+  Do: replace with same library or file name, except that $ORIGIN or $LIB or $PLATFORM is replaced
   Return: rval
   Todo: It seems loader replaces $LIB or $LIB/ but not $LIB in $LIBxxx, this replaces $LIB in $LIBxxx too.
+  Todo: https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=187114 suggests no need to check DF_ORIGIN flag nowadays
+        but that hasn't been tested
 */
 int pgfindlib_replace_lib_or_platform_or_origin(char* one_library_or_file, unsigned int *replacements_count, const char *lib, const char *platform, const char *origin)
 {
@@ -496,25 +554,28 @@ int pgfindlib_replace_lib_or_platform_or_origin(char* one_library_or_file, unsig
   *p_line_out= '\0';
   for (const char *p_line_in= one_library_or_file; *p_line_in != '\0';)
   {
-    if (strncmp(p_line_in, "$ORIGIN", 7) == 0)
+    if ((strncmp(p_line_in, "$ORIGIN", 7) == 0) || (strncmp(p_line_in, "${ORIGIN}", 9) == 0))
     {
       strcpy(p_line_out, origin);
       p_line_out+= strlen(origin);
-      p_line_in+= strlen("$ORIGIN");
+      if (*(p_line_in + 1) == '{') p_line_in+= 9 - 7;
+      p_line_in+= 7;
       ++*replacements_count;
     }
-    else if (strncmp(p_line_in, "$LIB", 4) == 0)
+    else if ((strncmp(p_line_in, "$LIB", 4) == 0) || (strncmp(p_line_in, "${LIB}", 6) == 0))
     {
       strcpy(p_line_out, lib);
       p_line_out+= strlen(lib);
-      p_line_in+= strlen("$LIB");
+      if (*(p_line_in + 1) == '{') p_line_in+= 6 - 4;
+      p_line_in+= 4;
       ++*replacements_count;
     }
-    else if (strncmp(p_line_in, "$PLATFORM", 9) == 0)
+    else if ((strncmp(p_line_in, "$PLATFORM", 9) == 0) || (strncmp(p_line_in, "${PLATFORM}", 11) == 0))
     {
       strcpy(p_line_out, platform);
       p_line_out+= strlen(platform);
-      p_line_in+= strlen("$PLATFORM");
+      if (*(p_line_in + 1) == '{') p_line_in+= 11 - 9;
+      p_line_in+= 9;
       ++*replacements_count;
     }
     else
@@ -736,7 +797,7 @@ extern void* __executable_start;
     if (rval != PGFINDLIB_OK) return rval;
 #endif
   }
-#endif //ifdef PGFINDLIB_FREEBSD ... else ... */
+#endif /* ifdef PGFINDLIB_FREEBSD ... else ... */
 
   if (platform_change_count == 0)
   {

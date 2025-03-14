@@ -1,6 +1,6 @@
 pgfindlib
 
-<P>Version 0.9.4</P>
+<P>Version 0.9.5</P>
 
 <P>The pgfindlib function finds dynamic libraries (.so files)
 in the order the loader would find them.</P>
@@ -22,29 +22,42 @@ picked up, and from where, and what choices it ignored.</P>
 mkdir /tmp/pgfindlib_example
 echo "Dummy .so" >> /tmp/pgfindlib_example/libutil.so
 gcc -o main main.c pgfindlib.c  -Wl,-rpath,/tmp/pgfindlib_example
-./main libutil.so:libcurl.so
+./main libutil.so:libcurl.so:libgcc_s.so
 </PRE>
 The result might look like this:
 <PRE>
-/* pgfindlib version 0.9.4 */
+/* pgfindlib version 0.9.5 */
 /* $LIB=lib/x86_64-linux-gnu $PLATFORM=x86_64 $ORIGIN=/home/pgulutzan/pgfindlib */
 /* LD_PRELOAD */
 /* DT_RPATH */
 /* LD_LIBRARY_PATH */
 /* replaced /$LIB with /lib/x86_64-linux-gnu */
+/* following item is a symlink */
 /lib/x86_64-linux-gnu/libutil.so
+/lib/x86_64-linux-gnu/libgcc_s.so.1
+/* following item is a symlink */
 /lib/x86_64-linux-gnu/libutil.so.1
 /lib/x86_64-linux-gnu/libcurl.so.4.6.0
+/* following item is a symlink */
 /lib/x86_64-linux-gnu/libcurl.so
+/* following item is a symlink */
 /lib/x86_64-linux-gnu/libcurl.so.4
 /* DT_RUNPATH */
 /tmp/pgfindlib_example/libutil.so
 /* LD_RUN_PATH */
 /* ld.so.cache */
 /lib/x86_64-linux-gnu/libutil.so.1
+/lib32/libutil.so.1
 /lib/x86_64-linux-gnu/libutil.so
+/lib/x86_64-linux-gnu/libgcc_s.so.1
+/lib/libgcc_s.so.1
+/lib32/libgcc_s.so.1
 /lib/x86_64-linux-gnu/libcurl.so.4
 /lib/x86_64-linux-gnu/libcurl.so
+/* default paths */
+/lib/libgcc_s.so.1
+/* following item is a hardlink (same inode as item 1 in this group) */
+/usr/lib/libgcc_s.so.1
 
 rval=0
 </PRE>
@@ -56,7 +69,7 @@ because there was an earlier "export LD_LIBRARY_PATH='/$LIB'"
 This takes precedence over DT_RUNPATH, which is where the first
 occurrence of libutil.so appears (this appears because of the
 -rpath option in the gcc command). Finally there are some .so libraries
-in ld.so.cache, which is where the loader would go if there was no
+in ld.so.cache and the system libraries, which is where the loader would go if there was no
 prior.</P>
 
 <P>That's all you need to know in order to decide if you're interested.
@@ -99,7 +112,8 @@ which is determined by gcc flags and environment variables.</P>
 
 <H3 id="Re Filter">Re Filter</H3><HR>
   From the passed sonames, we use pgfindlib_find_line_in_sonames() to filter the results of readdir() + popen("...ldconfig").
-  For example, when calling from ocelotgui, we only care about .so libraries that might be needed for
+  For example, when calling from
+  <a href="https://github.com/ocelot-inc/ocelotgui">ocelotgui</a>, we only care about .so libraries that might be needed for
   MariaDB or MySQL or Tarantool, which can include libcrypto (we might care for fewer .so libraries if ocelotgui
   is started with appropriate command-line or configuration-file options or a CMakeLists.txt switch.
   So we'd call pgfindlib("libmysqlclient.so:libmariadb.so:libmariadbclient.so:tarantool.so", ...);
@@ -107,6 +121,7 @@ which is determined by gcc flags and environment variables.</P>
 <H3 id="Re LD_AUDIT">Re LD_AUDIT</H3><HR>
 <P>Actually .so files in the LD_AUDIT environment variable https://man7.org/linux/man-pages/man7/rtld-audit.7.html
 would come first but would be specialized .so files that nobody cares about, thus this category should be empty.
+It is not shown if it is empty.
 </P>
 
 <H3 id="Re LD_PRELOAD">Re LD_PRELOAD</H3><HR>
@@ -141,6 +156,14 @@ So assume that: The loader knows nothing about the items in this section, it's i
 fails, it tries again with the -r option (-p is correct for Linux, -r is possible with FreeBSD).
 If everything fails, there will be a comment.</P>
 
+<H3 id="Re default paths">Re default paths</H3><HR>
+<P>Delivers the matches in /lib or /usr/lib or /lib64 or /usr/lib64,
+which are sometimes called "trusted" or "system" files.
+As you can see from the example at the start, the function detected that the second system file
+had the same inode as the first one which is characteristic of hardlinks.
+Showing symlinks and hardlinks is part of the job.
+</P>
+
 <H3 id="Re extra_paths">Re extra_paths</H3><HR>
 <P>This is another colon-or-semicolon-delimited string that can contain more paths that will be added at the end.
 For example ./main libcrypto.so /lib/x86_64-linux-gnu/ will pass "/lib/x86_64-linux-gnu/" as the final
@@ -148,10 +171,11 @@ argument to pgfindlib(), and buffer will get a list of any qualifying .so files 
 The loader knows nothing about the items in this section, it's informative.</P>
 
 <H3 id="Re order of execution">Re order of execution</H3><HR>
-<P>Officially it's LD_PRELOAD then DT_RPATH then LD_LIBRARY_PATH then DT_RUNPATH then /etc/ls.so.cache,
-so that's the display order.
-However, ocelotgui in fact goes LD_LIBRARY_PATH then LD_RUN_PATH then /etc/ls.so.cache
-then DT_RPATH or DT_RUNPATH.</P>
+<P>Officially it's LD_AUDIT then LD_PRELOAD then DT_RPATH then LD_LIBRARY_PATH then DT_RUNPATH then /etc/ls.so.cache
+then default paths, so that's the display order.
+However, one of the function's benefits is that it provides enough information for programmers to
+pick .so files from the buffer and dlopen() them ignoring the loader's order.
+</P>
 
 <H3 id="Re $ORIGIN">Re $ORIGIN</H3><HR>
 <P>It sees $ORIGIN, and replaces it with the path of the executable.
@@ -163,16 +187,16 @@ Example: if the executable is /home/pgulutzan/pgfindlib/main libcrypto,
          and not $ORIGIN/lib/libcrypto.so, but a comment may also appear.
 This is done by reading the symbolic link proc/self/exe with readlink.
 It's supposed to happen for DT_RPATH and DT_RUN_PATH but in fact it happens regardless of source.
-There has to be a different source for FreeBSD:
-  https://stackoverflow.com/questions/1023306/finding-current-executables-path-without-proc-self-exe
+There has to be a different source for
+<a href="https://stackoverflow.com/questions/1023306/finding-current-executables-path-without-proc-self-exe">FreeBSD</a>.
 In tests the usage was -Wl,-z,origin,-rpath,./lib,-rpath,\$ORIGIN</P>
 
 <H3 id="Re $LIB and $PLATFORM">Re Re $LIB and $PLATFORM</H3><HR> 
 <P>
-It sees and replaces these according to what the loader would do, which may differ
+It sees and replaces these "dynamic string tokens" according to what the loader would do, which may differ
 from what the Linux documentation says.
 For $LIB we only fall back to /lib64 or lib if there's an unexpected severe problem.
-The results are what's expected for the platform but we do not search /tls or platform subdirectoriesd.</P>
+The results are what's expected for the platform but we do not search /tls or platform subdirectories.</P>
 
 <H3 id="Re library lists">Re library lists</H3><HR>
 <P>DT_RPATH and DT_RUNPATH and LD_LIBRARY_PATH and LD_RUNPATH and extra_paths can all contain lists of paths.
@@ -202,7 +226,7 @@ There will be an error if any soname is longer than that, or if the name of any 
 
 <H3 id="Re Comments">Re Comments</H3><HR>
 <P>As well as file names, by default buffer will contain comments.
-For example /* LD_LIBRARY_PATH */" tells you that what follows, if anything,
+For example /* LD_LIBRARY_PATH */ tells you that what follows, if anything,
 is due to the LD_LIBRARY_PATH environment variable.
 Comments are always separate lines and always formatted like C-style comments.
 To strip comments, use gcc ... -DPGFINDLIB_WARNING_LEVEL=0 (the default is 4).</P>
@@ -210,7 +234,7 @@ To strip comments, use gcc ... -DPGFINDLIB_WARNING_LEVEL=0 (the default is 4).</
 <H3 id="Re comparisons">Re comparisons</H3><HR>
 <P>Usually pgfindlib considers that a file is matching if it starts with one of the passed soname values.
 This is so that soname = libx.so will also match libx.so.99 etc.
-Emphasis: the loader prefers to grab the exact soname e.g. libcrypto.so.1.1. The fact that you get hits for libcrypto.so is just a hint. There is no check whether a name refers to a symlink.</P>
+Emphasis: the loader prefers to grab the exact soname e.g. libcrypto.so.1.1. The fact that you get hits for libcrypto.so is just a hint. There is a message if a name refers to a symlink or hardlink.</P>
 
 <H3 id="Re pgfindlib_tests.sh">Re pgfindlib_tests.sh</H3><HR>
 <P>This Bash script has a set of tests that the loader really goes in this order.

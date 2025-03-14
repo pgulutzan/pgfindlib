@@ -52,6 +52,10 @@ extern int pgfindlib(const char *sonames, char *buffer, unsigned int buffer_max_
 #define PGFINDLIB_INCLUDE_LD_RUN_PATH 1
 #endif
 
+#ifndef PGFINDLIB_INCLUDE_DEFAULT_PATHS
+#define PGFINDLIB_INCLUDE_DEFAULT_PATHS 1
+#endif
+
 #ifndef PGFINDLIB_INCLUDE_LD_SO_CACHE
 #define PGFINDLIB_INCLUDE_LD_SO_CACHE 1
 #endif
@@ -62,6 +66,18 @@ extern int pgfindlib(const char *sonames, char *buffer, unsigned int buffer_max_
 
 #ifndef PGFINDLIB_INCLUDE_GET_LIB_OR_PLATFORM
 #define PGFINDLIB_INCLUDE_GET_LIB_OR_PLATFORM 1
+#endif
+
+#ifndef PGFINDLIB_INCLUDE_SYMLINKS
+#define PGFINDLIB_INCLUDE_SYMLINKS 1
+#endif
+
+#ifndef PGFINDLIB_INCLUDE_HARDLINKS
+#define PGFINDLIB_INCLUDE_HARDLINKS 1
+#endif
+
+#ifndef PGFINDLIB_MAX_INODE_COUNT
+#define PGFINDLIB_MAX_INODE_COUNT 100
 #endif
 
 #ifndef PGFINDLIB_MAX_PATH_LENGTH
@@ -76,6 +92,6 @@ extern int pgfindlib(const char *sonames, char *buffer, unsigned int buffer_max_
 
 #define PGFINDLIB_VERSION_MAJOR 0
 #define PGFINDLIB_VERSION_MINOR 9
-#define PGFINDLIB_VERSION_PATCH 4
+#define PGFINDLIB_VERSION_PATCH 5
 
 #endif
