@@ -8,7 +8,7 @@ int main (int argc, char *argv[])
     return 1;
   }
   char buffer[65536]; /* Must be big enough! */ 
-  int rval= pgfindlib(argv[1], buffer, 65536, argv[2]);
+  int rval= pgfindlib(argv[1], buffer, 65536);
   printf("%s\n", buffer);
   printf("rval=%d\n", rval);
   return 0;

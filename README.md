@@ -1,6 +1,8 @@
 pgfindlib
 
-<P>Version 0.9.5</P>
+<P>Version 0.9.6</P>
+
+<P>THIS README FILE IS OBSOLETE. IT WORKS DIFFERENTLY NOW. A FIX WILL COME IN A FEW DAYS.</P>
 
 <P>The pgfindlib function finds dynamic libraries (.so files)
 in the order the loader would find them.</P>
