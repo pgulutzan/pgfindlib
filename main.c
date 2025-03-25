@@ -4,7 +4,7 @@ int main (int argc, char *argv[])
 {
   if (argc <= 1)
   {
-    printf("Expected colon-delimited .so list. Example: main libmariadb.so:libmariadbclient.so:libmysqlclient.so:libtarantool.so:libcrypto.so\n");
+    printf("Expected statement. Example: main 'where libmariadb.so,libmariadbclient.so,libmysqlclient.so,libtarantool.so,libcrypto.so\n");
     return 1;
   }
   char buffer[65536]; /* Must be big enough! */ 

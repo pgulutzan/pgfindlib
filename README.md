@@ -1,8 +1,6 @@
 pgfindlib
 
-<P>Version 0.9.6</P>
-
-<P>THIS README FILE IS OBSOLETE. IT WORKS DIFFERENTLY NOW. A FIX WILL COME IN A FEW DAYS.</P>
+<P>Version 0.9.7</P>
 
 <P>The pgfindlib function finds dynamic libraries (.so files)
 in the order the loader would find them.</P>
@@ -24,42 +22,25 @@ picked up, and from where, and what choices it ignored.</P>
 mkdir /tmp/pgfindlib_example
 echo "Dummy .so" >> /tmp/pgfindlib_example/libutil.so
 gcc -o main main.c pgfindlib.c  -Wl,-rpath,/tmp/pgfindlib_example
-./main libutil.so:libcurl.so:libgcc_s.so
+./main 'where libutil.so, libcurl.so, libgcc_s.so'
 </PRE>
 The result might look like this:
 <PRE>
-/* pgfindlib version 0.9.5 */
-/* $LIB=lib/x86_64-linux-gnu $PLATFORM=x86_64 $ORIGIN=/home/pgulutzan/pgfindlib */
-/* LD_PRELOAD */
-/* DT_RPATH */
-/* LD_LIBRARY_PATH */
-/* replaced /$LIB with /lib/x86_64-linux-gnu */
-/* following item is a symlink */
-/lib/x86_64-linux-gnu/libutil.so
-/lib/x86_64-linux-gnu/libgcc_s.so.1
-/* following item is a symlink */
-/lib/x86_64-linux-gnu/libutil.so.1
-/lib/x86_64-linux-gnu/libcurl.so.4.6.0
-/* following item is a symlink */
-/lib/x86_64-linux-gnu/libcurl.so
-/* following item is a symlink */
-/lib/x86_64-linux-gnu/libcurl.so.4
-/* DT_RUNPATH */
-/tmp/pgfindlib_example/libutil.so
-/* LD_RUN_PATH */
-/* ld.so.cache */
-/lib/x86_64-linux-gnu/libutil.so.1
-/lib32/libutil.so.1
-/lib/x86_64-linux-gnu/libutil.so
-/lib/x86_64-linux-gnu/libgcc_s.so.1
-/lib/libgcc_s.so.1
-/lib32/libgcc_s.so.1
-/lib/x86_64-linux-gnu/libcurl.so.4
-/lib/x86_64-linux-gnu/libcurl.so
-/* default paths */
-/lib/libgcc_s.so.1
-/* following item is a hardlink (same inode as item 1 in this group) */
-/usr/lib/libgcc_s.so.1
+0,,,002 pgfindlib,001 version 0.9.7,003 https://github.com/pgulutzan/pgfindlib,,
+1,,,005 $LIB=lib/x86_64-linux-gnu,006 $PLATFORM=x86_64,007 $ORIGIN=/home/pgulutzan/pgfindlib,,
+2,/tmp/pgfindlib_example/libutil.so,DT_RUNPATH,071 elf read failed,,,,
+3,/lib/libgcc_s.so.1,ld.so.cache,,,,,
+4,/lib/x86_64-linux-gnu/libcurl.so,ld.so.cache,,,,,
+5,/lib/x86_64-linux-gnu/libcurl.so.4,ld.so.cache,014 duplicate of 4,,,,
+6,/lib/x86_64-linux-gnu/libgcc_s.so.1,ld.so.cache,,,,,
+7,/lib/x86_64-linux-gnu/libutil.so,ld.so.cache,,,,,
+8,/lib/x86_64-linux-gnu/libutil.so.1,ld.so.cache,014 duplicate of 7,,,,
+9,/lib32/libgcc_s.so.1,ld.so.cache,075 elf machine does not match,,,,
+10,/lib32/libutil.so.1,ld.so.cache,075 elf machine does not match,,,,
+11,/lib/libgcc_s.so.1,default_paths,014 duplicate of 3,,,,
+12,/usr/lib/libgcc_s.so.1,default_paths,014 duplicate of 3,,,,
+
+rval=0
 
 rval=0
 </PRE>
@@ -72,7 +53,12 @@ This takes precedence over DT_RUNPATH, which is where the first
 occurrence of libutil.so appears (this appears because of the
 -rpath option in the gcc command). Finally there are some .so libraries
 in ld.so.cache and the system libraries, which is where the loader would go if there was no
-prior.</P>
+prior. But some of the lines contain warnings, for example
+"071 elf read failed" because /tmp/pgfindlib_example/libutil.so
+is not a loadable file, or for example
+"075 elf machine does not match" because main is 64-bit and 
+/lib32/libgcc_s.so.1 is 32-bit.
+</P>
 
 <P>That's all you need to know in order to decide if you're interested.
 If you are, read on, there are many options and a few warnings.</P>
@@ -88,16 +74,24 @@ pgfindlib_tests.sh, a script that checks the assumptions and claims made about .
 README.md, this file.</P>
 
 <P>There is one callable function in pgfindlib.c, named pgfindlib.
-It's arguments are:<BR>
- sonames, a colon-separated list of .so names e.g. libcrypto.so:libmariadb.so<BR>
+Its arguments are:<BR>
+ statement, including 'where' + a comma-delimited list of .so names e.g. where libcrypto.so,libmariadb.so<BR>
  buffer, a space to receive the result<BR>
  buffer_max_length, maximum number of bytes in result including \0 terminator<BR>
- extra_paths, usually null, described later
+ The character set is assumed to be 8-bit including ASCII.
 </P>
 
 <P>The return is:<BR>
 buffer contents with paths including .so names in the order the loader looks for them,
-which is determined by gcc flags and environment variables.</P>
+which is determined by gcc flags and environment variables.
+For example:<BR>
+11,/lib/libgcc_s.so.1,default_paths,014 duplicate of 3,,,,<BR>
+has 7 columns (all rows have 7 columns).
+The first column is a row number.
+The second column is a path.
+The third column is the "source" -- this was in the dynamic loaders default_paths.
+The remaining columns are comments including errors or warnings, and are often blank.
+</P>
 
 <P>The license is: GPLv2.</P>
 
@@ -110,20 +104,28 @@ which is determined by gcc flags and environment variables.</P>
   -1 PGFINDLIB_ERROR_MAX_BUFFER_LENGTH_TOO_SMALL execution stopped after output of nearly buffer_max_length bytes
   -2 PGFINDLIB_ERROR_NULL e.g. pgfindlib() was called with a null pointer so nothing was done
   -3 PGFINDLIB_ERROR_MAX_PATH_LENGTH_TOO_SMALL e.g. a path is 5000 bytes (the default maximum is 4096)
-  ... In fact anything other than 0 should be extremely rare.
+  ... In fact anything other than 0 should be extremely rare if the statement syntax is okay.
 
 <H3 id="Re Filter">Re Filter</H3><HR>
-  From the passed sonames, we use pgfindlib_find_line_in_sonames() to filter the results of readdir() + popen("...ldconfig").
+  From the passed sonames, pgfindlib filters the results of readdir() + popen("...ldconfig") from the sources.
   For example, when calling from
   <a href="https://github.com/ocelot-inc/ocelotgui">ocelotgui</a>, we only care about .so libraries that might be needed for
   MariaDB or MySQL or Tarantool, which can include libcrypto (we might care for fewer .so libraries if ocelotgui
   is started with appropriate command-line or configuration-file options or a CMakeLists.txt switch.
-  So we'd call pgfindlib("libmysqlclient.so:libmariadb.so:libmariadbclient.so:tarantool.so", ...);
+  So we'd call pgfindlib("where libmysqlclient.so,libmariadb.so,libmariadbclient.so,tarantool.so", ...);
+
+<H3 id="standard">Re standard sources</H3><HR>
+<P>
+The standard sources are, in order:
+LD_AUDIT LD_PRELOAD DT_RPATH LD_LIBRARY_PATH DT_RUNPATH LD_RUN_PATH ld.so.cache default_paths LD_PGFINDLIB_PATH.
+These are environment variables and caches that the dynamic loader would look at,
+along with some that are just informational.
+</p>
 
 <H3 id="Re LD_AUDIT">Re LD_AUDIT</H3><HR>
-<P>Actually .so files in the LD_AUDIT environment variable https://man7.org/linux/man-pages/man7/rtld-audit.7.html
+<P>Actually .so files in the
+<a href="https://man7.org/linux/man-pages/man7/rtld-audit.7.html">LD_AUDIT environment variable</a> 
 would come first but would be specialized .so files that nobody cares about, thus this category should be empty.
-It is not shown if it is empty.
 </P>
 
 <H3 id="Re LD_PRELOAD">Re LD_PRELOAD</H3><HR>
@@ -152,13 +154,14 @@ The result would be that the /home/me/lib directory is the directory that gets s
 But on test machine that's not the case.
 So assume that: The loader knows nothing about the items in this section, it's informative.</P>
 
-<H3 id="Re /etc/ld.so.cache">Re /etc/ld.so.cache</H3><HR>
-<P>Delivers the result of /sbin/ldconfig -p. If /sbin/ldconfig is not found (very unlikely), it tries again with
+<H3 id="Re ld.so.cache">Re ld.so.cache</H3><HR>
+<P>Delivers the result of /sbin/ldconfig -p which by default looks at /etc/ld.so.cache.
+If /sbin/ldconfig is not found (very unlikely), it tries again with
 /usr/sbin/ldconfig or /bin/ldconfig or /usr/bin/ldconfig or ldconfig. If execution with the -p option
 fails, it tries again with the -r option (-p is correct for Linux, -r is possible with FreeBSD).
 If everything fails, there will be a comment.</P>
 
-<H3 id="Re default paths">Re default paths</H3><HR>
+<H3 id="Re default_paths">Re default_paths</H3><HR>
 <P>Delivers the matches in /lib or /usr/lib or /lib64 or /usr/lib64,
 which are sometimes called "trusted" or "system" files.
 As you can see from the example at the start, the function detected that the second system file
@@ -166,17 +169,22 @@ had the same inode as the first one which is characteristic of hardlinks.
 Showing symlinks and hardlinks is part of the job.
 </P>
 
-<H3 id="Re extra_paths">Re extra_paths</H3><HR>
+<H3 id="Re LD_PGFINDLIB_PATH">Re LD_PGFINDLIB_PATH</H3><HR>
 <P>This is another colon-or-semicolon-delimited string that can contain more paths that will be added at the end.
-For example ./main libcrypto.so /lib/x86_64-linux-gnu/ will pass "/lib/x86_64-linux-gnu/" as the final
-argument to pgfindlib(), and buffer will get a list of any qualifying .so files in /lib/x86_64-linux-gnu.
+For example<BR>
+LD_PGFINDLIB_PATH='/lib/x86_64-linux-gnu' ./main 'where libcrypto.so'
+<BR>
+will include the contents of the LD_PGFINDLIB_PATH environment variable as a standard source,
+and buffer will get a list of any qualifying .so files in /lib/x86_64-linux-gnu.
 The loader knows nothing about the items in this section, it's informative.</P>
 
 <H3 id="Re order of execution">Re order of execution</H3><HR>
-<P>Officially it's LD_AUDIT then LD_PRELOAD then DT_RPATH then LD_LIBRARY_PATH then DT_RUNPATH then /etc/ls.so.cache
-then default paths, so that's the display order.
+<P>Officially it's LD_AUDIT then LD_PRELOAD then DT_RPATH then LD_LIBRARY_PATH then DT_RUNPATH then ld.so.cache
+then default_paths, so that's the display order.
 However, one of the function's benefits is that it provides enough information for programmers to
 pick .so files from the buffer and dlopen() them ignoring the loader's order.
+Also the calling program can change the desired order, or add and remove sources, via
+the FROM clause which will be described later.
 </P>
 
 <H3 id="Re $ORIGIN">Re $ORIGIN</H3><HR>
@@ -201,7 +209,7 @@ For $LIB we only fall back to /lib64 or lib if there's an unexpected severe prob
 The results are what's expected for the platform but we do not search /tls or platform subdirectories.</P>
 
 <H3 id="Re library lists">Re library lists</H3><HR>
-<P>DT_RPATH and DT_RUNPATH and LD_LIBRARY_PATH and LD_RUNPATH and extra_paths can all contain lists of paths.
+<P>DT_RPATH and DT_RUNPATH and LD_LIBRARY_PATH and LD_RUNPATH and LD_PGFINDLIB_PATH can all contain lists of paths.
 If the path is blank or there's a trailing : we do not treat it as "." which seems to be how loader handles it.</P>
 
 <H3 id="Re ldconfig -p and uname -m">Re ldconfig -p and uname -m</H3><HR>
@@ -214,7 +222,7 @@ The strings utility e.g. "strings -n5 /etc/ld.so.cache" might work but not with 
 
 <H3 id="Re security">Re security</H3><HR>
 <P>The list does not prove that the first-displayed library will be loaded first.
-For example, the user might not have permission -- there will be a comment if access(..., X_OK)
+For example, the user might not have permission -- there will be a comment if access(..., R_OK)
 fails, but no comment for other cases.</P>
 
 <H3 id="Re trailing solidus i.e. forward slash i.e. /">Re trailing solidus i.e. forward slash i.e. /e</H3><HR>
@@ -227,16 +235,16 @@ Conclusion: depending on #include linux/limits.h won't do. So there's a #define 
 There will be an error if any soname is longer than that, or if the name of any found path is longer than that.</P>
 
 <H3 id="Re Comments">Re Comments</H3><HR>
-<P>As well as file names, by default buffer will contain comments.
-For example /* LD_LIBRARY_PATH */ tells you that what follows, if anything,
-is due to the LD_LIBRARY_PATH environment variable.
-Comments are always separate lines and always formatted like C-style comments.
-To strip comments, use gcc ... -DPGFINDLIB_WARNING_LEVEL=0 (the default is 4).</P>
+<P>As well as file names, by default buffer rows will contain comments.
+For a list of possible comments see lines beginning with #define PGFINDLIB_COMMENT in pgfindlib.h.
+If comments are due to errors, they will be in a warning column and most other columns will be empty.
+</P>
 
 <H3 id="Re comparisons">Re comparisons</H3><HR>
 <P>Usually pgfindlib considers that a file is matching if it starts with one of the passed soname values.
 This is so that soname = libx.so will also match libx.so.99 etc.
-Emphasis: the loader prefers to grab the exact soname e.g. libcrypto.so.1.1. The fact that you get hits for libcrypto.so is just a hint. There is a message if a name refers to a symlink or hardlink.</P>
+Emphasis: the loader prefers to grab the exact soname e.g. libcrypto.so.1.1. The fact that you get hits for libcrypto.so is just a hint. There is a message if a name refers to a symlink or hardlink.
+Comparisons are case sensitive and results are undefined if the soname does not contain ".so*".</P>
 
 <H3 id="Re pgfindlib_tests.sh">Re pgfindlib_tests.sh</H3><HR>
 <P>This Bash script has a set of tests that the loader really goes in this order.
@@ -244,19 +252,30 @@ To make sure that your situation is the same as what we found on various test ma
 say chmod +x then ./pgfindlib_tests.sh
 You should see that all test results are marked "Good".</P>
 
+<H3 id="FROM">Re FROM</H3><HR>
+Initially you'l only care about "WHERE so-name-list". But there is an optional leading clause:<BR>
+FROM source-list<BR>
+The source can be: any of the standard source names (LD_LIBRARY_PATH etc.),
+or non-standard names, in any order. A non-standard name should be a directory.
+Comparisons or names are case sensitive.
+For example:<BR>
+FROM default_paths, LD_LIBRARY_PATH, /tmp WHERE libcrypto.so<BR>
+will look in default_paths and LD_LIBRARY_PATH ignoring the other standard sources,
+and will additionally check the /tmp directory.
+
 <H3 id="Some more possible tests">Some more possible tests</H3><HR>
 <P>(using main.c which is supplied with the package)
 <PRE>
 gcc -Wall -o main main.c pgfindlib.c  -Wl,-rpath,./lib,-rpath,"/tmp/A B"
-./main libcrypto.so
+./main 'where libcrypto.so'
 export LD_LIBRARY_PATH=/usr/lib64/'unusual path'
-./main libcrypto.so
+./main 'where libcrypto.so'
 gcc -o main main.c pgfindlib.c -Wl,-rpath,./lib,-rpath,./ocelotgui,-disable-new-dtag
-./main libcrypto.so
+./main 'FROM D_RPATH, D_RUNPATH WHERE libcrypto.so'
 gcc -o main main.c pgfindlib.c -Wl,-z,origin,-rpath,./lib,-rpath,\$ORIGIN
-./main libcrypto.so
+./main 'where libcrypto.so'
 gcc -o main main.c pgfindlib.c -DPGFINDLIB_WARNING_LEVEL=1 -Wl,-z,origin,-rpath,./lib,-rpath,\$ORIGIN
-./main libcrypto.so</PRE>
+./main 'where libcrypto.so'</PRE>
 </PRE></P>
 
 <H3 id="Contacts">Contacts</H3><HR>
