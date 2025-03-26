@@ -823,6 +823,8 @@ int pgfindlib_row_source_name(char *buffer, unsigned int *buffer_length, unsigne
   Put file name in buffer. Precede with, or include, comments if there are any.
   todo: pgfindlib_comment = source name if first in source and not done before
   todo: some parameters unused e.g. inode_warning_count
+  todo: can use st_nlink to see how many hardlinks a file has (expect it to have at least 1)
+  todo: maybe there's a way to follow a symlink -- we use lstat on the file, maybe stat() would do better
 */
 int pgfindlib_file(char *buffer, unsigned int *buffer_length, const char *line, unsigned int buffer_max_length,
                           unsigned int *row_number,
@@ -858,7 +860,7 @@ int pgfindlib_file(char *buffer, unsigned int *buffer_length, const char *line, 
   }
   ino_t inode;
   struct stat sb;
-  if (stat(line_copy, &sb) == -1)
+  if (lstat(line_copy, &sb) == -1)
   {
     pgfindlib_comment_in_row(warning_stat_next_failed, PGFINDLIB_COMMENT_STAT_NEXT_FAILED, 9);
     columns_list[columns_list_number++]= warning_stat_next_failed;
