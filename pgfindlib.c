@@ -2,7 +2,7 @@
   pgfindlib.c --   To get a list of paths and .so files along paths dynamic loader might choose, with some extra information
 
    Version: 0.9.7
-   Last modified: March 25 2025
+   Last modified: March 26 2025
 
   Copyright (c) 2025 by Peter Gulutzan. All rights reserved.
 
@@ -18,8 +18,9 @@
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-
-  For explanation see the README.md file which comes with the pgfindlib package.
+*/
+/*
+  Package: https://github.com/pgulutzan/pgfindlib
 */
 
 #include <stdio.h>
@@ -61,7 +62,7 @@ static int pgfindlib_comment_in_row(char *comment, unsigned int comment_number, 
 
 static int pgfindlib_keycmp(const char *a, unsigned int a_len, const char *b);
 static int pgfindlib_tokenize(const char *statement, struct tokener tokener_list[],
-                              unsigned int *row_number,
+                              unsigned int *row_number, ino_t inode_list[], unsigned int *inode_count,
                               char *buffer, unsigned int *buffer_length, unsigned int buffer_max_length);
 
 
@@ -83,7 +84,8 @@ static int pgfindlib_row_source_name(char *buffer, unsigned int *buffer_length, 
 static int pgfindlib_replace_lib_or_platform_or_origin(char *one_library_or_file, unsigned int *replacements_count, const char *lib, const char *platform, const char *origin);
 static int pgfindlib_get_origin_and_lib_and_platform(char *origin, char *lib, char *platform,
                                               char *buffer, unsigned int *buffer_length, unsigned buffer_max_length,
-                                              int *program_e_machine, unsigned int *row_number);
+                                              int *program_e_machine, unsigned int *row_number,
+                                              ino_t inode_list[], unsigned int *inode_count);
 static int pgfindlib_so_cache(const struct tokener tokener_list[], int tokener_number,
                        char *malloc_buffer_1, unsigned int *malloc_buffer_1_length, unsigned malloc_buffer_1_max_length,
                        char **malloc_buffer_2, unsigned int *malloc_buffer_2_length, unsigned malloc_buffer_2_max_length);
@@ -118,8 +120,8 @@ static int pgfindlib_source_scan(const char *librarylist, char *buffer, unsigned
                                 int program_e_machine);
 static int pgfindlib_read_elf(const struct tokener tokener_list[], const char* possible_elf_file, int reason, int program_e_machine);
 static int pgfindlib_comment_is_row(char *comment, unsigned int comment_number,
-                             char *buffer, unsigned int *buffer_length, unsigned int buffer_max_length, unsigned int *row_number);
-
+                             char *buffer, unsigned int *buffer_length, unsigned int buffer_max_length, unsigned int *row_number,
+                             ino_t inode_list[], unsigned int *inode_count);
 
 int pgfindlib(const char *statement, char *buffer, unsigned int buffer_max_length)
 {
@@ -146,7 +148,7 @@ int pgfindlib(const char *statement, char *buffer, unsigned int buffer_max_lengt
   char platform[PGFINDLIB_MAX_PATH_LENGTH]= ""; /* Usually this will be changed to whatever $LIB is. */
   char origin[PGFINDLIB_MAX_PATH_LENGTH]= ""; /* Usually this will be changed to whatever $LIB is. */
   rval= pgfindlib_get_origin_and_lib_and_platform(origin, lib, platform, buffer, &buffer_length, buffer_max_length,
-                                                  &program_e_machine, &row_number);
+                                                  &program_e_machine, &row_number, inode_list, &inode_count);
   if (rval != PGFINDLIB_OK) goto free_and_return;
 
 #if (PGFINDLIB_INCLUDE_ROW_LIB != 0)
@@ -160,7 +162,7 @@ int pgfindlib(const char *statement, char *buffer, unsigned int buffer_max_lengt
   /* MAX_TOKENS_COUNT is fixed but more than twice the number of official tokeners */
   struct tokener tokener_list[PGFINDLIB_MAX_TOKENS_COUNT];
   {
-    rval= pgfindlib_tokenize(statement, tokener_list, &row_number, buffer, &buffer_length, buffer_max_length);
+    rval= pgfindlib_tokenize(statement, tokener_list, &row_number, inode_list, &inode_count, buffer, &buffer_length, buffer_max_length);
     if (rval != PGFINDLIB_OK) goto free_and_return;
   }
   unsigned int rpath_or_runpath_count= 0;
@@ -171,7 +173,7 @@ int pgfindlib(const char *statement, char *buffer, unsigned int buffer_max_lengt
       ++rpath_or_runpath_count;
   }
 
-   pgfindlib_read_elf(tokener_list, "/tmp/pgfindlib_tests/test", 2, 1); 
+  pgfindlib_read_elf(tokener_list, "/tmp/pgfindlib_tests/test", 2, 1); 
   /* pgfindlib_read_elf(tokener_list, "/home/pgulutzan/pgfindlib/main", 1, 1); */
   /* pgfindlib_read_elf(tokener_list, "/lib32/libnsl.so.1", 1, 1); */
   
@@ -189,7 +191,7 @@ int pgfindlib(const char *statement, char *buffer, unsigned int buffer_max_lengt
 #if (PGFINDLIB_COMMENT_CANNOT_READ_RPATH != 0)
       rval= pgfindlib_comment_is_row("Cannot read DT_RPATH because _DYNAMIC is NULL",
                                      PGFINDLIB_COMMENT_CANNOT_READ_RPATH,
-                                     buffer, &buffer_length, buffer_max_length, &row_number);
+                                     buffer, &buffer_length, buffer_max_length, &row_number, inode_list, &inode_count);
       if (rval != PGFINDLIB_OK) goto free_and_return;
 #endif
     }
@@ -309,15 +311,63 @@ repeat_malloc:
           the problem is that even comments look at node, and they could come before this
     todo: with a large number of sources, > 127 - 32, and signed char, the sort order might become wrong
   */
+  rval= PGFINDLIB_OK;
+#if (PGFINDLIB_INCLUDE_ROW_SOURCE_NAME == 1)
+  int token_number_of_last_source= 0;
+#endif
   for (unsigned int i= 0; i < malloc_buffer_2_length; ++i)
   {
     const char *item= malloc_buffer_2[i];
     /* First char is source number + 32 */
     int token_number_of_source= *item - 32;
+#if (PGFINDLIB_INCLUDE_ROW_SOURCE_NAME == 1)
+    for (unsigned int j= token_number_of_last_source;; ++j)
+    {
+      unsigned short int type= tokener_list[j].tokener_comment_id;
+      if (type == PGFINDLIB_TOKEN_END) break;
+      if ((type < PGFINDLIB_TOKEN_SOURCE_LD_AUDIT) || (type > PGFINDLIB_TOKEN_SOURCE_NONSTANDARD)) continue;
+      if (j > token_number_of_source) break;
+      if ((j > token_number_of_last_source) && (j <= token_number_of_source))
+      {
+        char source_name[64];
+        unsigned short int len= tokener_list[j].tokener_length;
+        if (len > 64 - 1) len= 64 - 1;
+        memcpy(source_name, tokener_list[j].tokener_name, len);
+        source_name[len]= '\0';
+        rval= pgfindlib_row_source_name(buffer, &buffer_length, buffer_max_length, &row_number,
+                             inode_list, &inode_count, source_name);
+        if (rval != PGFINDLIB_OK) break;
+      }
+    }
+    if (rval != PGFINDLIB_OK) break;
+    token_number_of_last_source= token_number_of_source + 1;
+#endif
     rval= pgfindlib_file(buffer, &buffer_length, item + 1, buffer_max_length, &row_number,
                        inode_list, &inode_count, &inode_warning_count, tokener_list[token_number_of_source], program_e_machine);
+    if (rval != PGFINDLIB_OK) break;
   }
-  rval= PGFINDLIB_OK;
+#if (PGFINDLIB_INCLUDE_ROW_SOURCE_NAME == 1)
+  if (rval == PGFINDLIB_OK)
+  {
+    /* todo: repetitious */
+    for (unsigned int j= token_number_of_last_source;; ++j)
+    {
+      unsigned short int type= tokener_list[j].tokener_comment_id;
+      if (type == PGFINDLIB_TOKEN_END) break;
+      if ((type < PGFINDLIB_TOKEN_SOURCE_LD_AUDIT) || (type > PGFINDLIB_TOKEN_SOURCE_NONSTANDARD)) continue;
+      {
+        char source_name[64];
+        unsigned short int len= tokener_list[j].tokener_length;
+        if (len > 64 - 1) len= 64 - 1;
+        memcpy(source_name, tokener_list[j].tokener_name, len);
+        source_name[len]= '\0';
+        rval= pgfindlib_row_source_name(buffer, &buffer_length, buffer_max_length, &row_number,
+                             inode_list, &inode_count, source_name);
+        if (rval != PGFINDLIB_OK) break;
+      }
+    }
+  }
+#endif
 free_and_return:
   if (malloc_buffer_1 != NULL) { free(malloc_buffer_1); }
   if (malloc_buffer_2 != NULL) { free(malloc_buffer_2); }
@@ -442,7 +492,8 @@ int pgfindlib_replace_lib_or_platform_or_origin(char *one_library_or_file, unsig
 */
 int pgfindlib_get_origin_and_lib_and_platform(char *origin, char *lib, char *platform,
                                               char *buffer, unsigned int *buffer_length, unsigned int buffer_max_length,
-                                              int *program_e_machine, unsigned int *row_number)
+                                              int *program_e_machine, unsigned int *row_number,
+                                              ino_t inode_list[], unsigned int *inode_count)
 {
   int platform_change_count= 0;
   int rval= PGFINDLIB_OK;
@@ -454,7 +505,7 @@ int pgfindlib_get_origin_and_lib_and_platform(char *origin, char *lib, char *pla
 #if (PGFINDLIB_COMMENT_ELF_AUX_INFO_FAILED != 0)
     rval= pgfindlib_comment_is_row("elf_aux_info failed so $ORIGIN is unknown",
                                    PGFINDLIB_COMMENT_ELF_AUX_INFO_FAILED,
-                                   buffer, &buffer_length, buffer_max_length, &row_number);
+                                   buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
     if (rval != PGFINDLIB_OK) return rval;
 #endif
     strcpy(origin, "");
@@ -471,7 +522,7 @@ int pgfindlib_get_origin_and_lib_and_platform(char *origin, char *lib, char *pla
 #if (PGFINDLIB_COMMENT_READLINK_FAILED != 0)
       rval= pgfindlib_comment_is_row("readlink failed so $ORIGIN is unknown",
                          PGFINDLIB_COMMENT_READLINK_FAILED,
-                         buffer, buffer_length, buffer_max_length, row_number);
+                         buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
       if (rval != PGFINDLIB_OK) return rval;
 #endif
       strcpy(origin, "");
@@ -486,21 +537,23 @@ int pgfindlib_get_origin_and_lib_and_platform(char *origin, char *lib, char *pla
       }
     }
   }
+#endif /* ifdef PGFINDLIB_FREEBSD */
 
 #if (PGFINDLIB_IF_GET_LIB_OR_PLATFORM != 0)
   /* utility name */
-  /* todo: FreeBSD probably won't have /bin/true, it seems to be a Linux thing */
+  /* FreeBSD probably won't have /bin/true, it seems to be a Linux thing, but maybe it will have id */
   char utility_name[256]= "";
   if (access("/bin/true", X_OK) == 0) strcpy(utility_name, "/bin/true");
   else if (access("/bin/cp", X_OK) == 0) strcpy(utility_name, "/bin/cp");
   else if (access("/usr/bin/true", X_OK) == 0) strcpy(utility_name, "/usr/bin/true");
   else if (access("/usr/bin/cp", X_OK) == 0) strcpy(utility_name, "/usr/bin/cp");
+  else if (access("/bin/id", X_OK) == 0) strcpy(utility_name, "/bin/id");
 #if (PGFINDLIB_COMMENT_NO_TRUE_OR_CP != 0)
   if (strcmp(utility_name, "") == 0)
   {
-    rval= pgfindlib_comment_is_row("no access to [/usr]/bin/true or [/usr]/cp",
+    rval= pgfindlib_comment_is_row("no access to [/usr]/bin/true or [/usr]/bin/cp or /bin/id",
                          PGFINDLIB_COMMENT_NO_TRUE_OR_CP,
-                         buffer, buffer_length, buffer_max_length, row_number);
+                         buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
     if (rval != PGFINDLIB_OK) return rval;
   }
 #endif
@@ -516,7 +569,7 @@ extern void* __executable_start;
 #if (PGFINDLIB_COMMENT_EHDR_IDENT != 0)
       rval= pgfindlib_comment_is_row("ehdr->ident not valid",
                          PGFINDLIB_COMMENT_EHDR_IDENT,
-                         buffer, buffer_length, buffer_max_length, row_number);
+                         buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
       if (rval != PGFINDLIB_OK) return rval;
 #endif
       ehdr= NULL;
@@ -560,7 +613,7 @@ extern void* __executable_start;
     sprintf(comment, "can't get ehdr dynamic loader so assume %s", dynamic_loader_name);
     rval= pgfindlib_comment_is_row(comment,
                          PGFINDLIB_COMMENT_CANT_FIND_DYNAMIC_LOADER,
-                         buffer, buffer_length, buffer_max_length, row_number);
+                         buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
     if (rval != PGFINDLIB_OK) return rval;
 #endif
   }
@@ -572,7 +625,7 @@ extern void* __executable_start;
     sprintf(comment, "can't access %s", dynamic_loader_name);
     rval= pgfindlib_comment_is_row(comment,
                          PGFINDLIB_COMMENT_CANT_ACCESS_DYNAMIC_LOADER,
-                         buffer, buffer_length, buffer_max_length, row_number);
+                         buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
     if (rval != PGFINDLIB_OK) return rval;
 #endif
     dynamic_loader_name= NULL;
@@ -639,7 +692,7 @@ extern void* __executable_start;
       }
     }
   }
-#endif
+#endif /* if (PGFINDLIB_IF_GET_LIB_OR_PLATFORM != 0) */
   if (lib_change_count == 0)
   {
     if ((sizeof(void*)) == 8) strcpy(lib, "lib64"); /* default $LIB if pgfindlib__get_lib_or_platform doesn't work */
@@ -649,11 +702,10 @@ extern void* __executable_start;
     sprintf(comment, "assuming $LIB is %s", lib);
     rval= pgfindlib_comment_is_row(comment,
                          PGFINDLIB_COMMENT_ASSUMING_LIB,
-                         buffer, buffer_length, buffer_max_length, row_number);
+                         buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
     if (rval != PGFINDLIB_OK) return rval;
 #endif
   }
-#endif /* ifdef PGFINDLIB_FREEBSD ... else ... */
 
   if (platform_change_count == 0)
   {
@@ -670,7 +722,7 @@ extern void* __executable_start;
     {
       rval= pgfindlib_comment_is_row("uname -m failed",
                          PGFINDLIB_COMMENT_UNAME_FAILED,
-                         buffer, buffer_length, buffer_max_length, row_number);
+                         buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
       if (rval != PGFINDLIB_OK) return rval;
     }
 #endif
@@ -682,7 +734,7 @@ extern void* __executable_start;
     sprintf(comment, "assuming $PLATFORM is %s", platform);
     rval= pgfindlib_comment_is_row(comment,
                          PGFINDLIB_COMMENT_ASSUMING_PLATFORM,
-                         buffer, buffer_length, buffer_max_length, row_number);
+                         buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
     if (rval != PGFINDLIB_OK) return rval;
 #endif
   }
@@ -702,11 +754,11 @@ extern void* __executable_start;
 int pgfindlib_comment_in_row(char *comment, unsigned int comment_number, int additional_number)
 {
   const char *text;
-  if (comment_number == PGFINDLIB_COMMENT_NEXT_DUPLICATE) sprintf(comment, "%03d %s %d", comment_number, "duplicate of", additional_number);
+  if (comment_number == PGFINDLIB_COMMENT_DUPLICATE) sprintf(comment, "%03d %s %d", comment_number, "duplicate of", additional_number);
   else
   {
-    if (comment_number == PGFINDLIB_COMMENT_ACCESS_NEXT_FAILED) text= "access(filename, R_OK) failed";
-    if (comment_number == PGFINDLIB_COMMENT_STAT_NEXT_FAILED) text= "stat(filename) failed";
+    if (comment_number == PGFINDLIB_COMMENT_ACCESS_FAILED) text= "access(filename, R_OK) failed";
+    if (comment_number == PGFINDLIB_COMMENT_LSTAT_FAILED) text= "lstat(filename) failed";
     if (comment_number == PGFINDLIB_COMMENT_SYMLINK) text= "symlink";
     if (comment_number == PGFINDLIB_COMMENT_MAX_INODE_COUNT_TOO_SMALL) text= "MAX_INODE_COUNT is too small";
     if (comment_number == PGFINDLIB_COMMENT_ELF_OPEN_FAILED) text= "elf open failed";
@@ -724,8 +776,10 @@ int pgfindlib_comment_in_row(char *comment, unsigned int comment_number, int add
    But notice the fixed size of comment_with_number, don't call unless it's certain that the message is short
 */
 int pgfindlib_comment_is_row(char *comment, unsigned int comment_number,
-                             char *buffer, unsigned int *buffer_length, unsigned int buffer_max_length, unsigned int *row_number)
+                             char *buffer, unsigned int *buffer_length, unsigned int buffer_max_length, unsigned int *row_number,
+                             ino_t inode_list[], unsigned int *inode_count)
 {
+  if (*inode_count != PGFINDLIB_MAX_INODE_COUNT) { inode_list[*inode_count]= -1; ++*inode_count; }
   const char *columns_list[MAX_COLUMNS_PER_ROW];  
   for (int i= 0; i < MAX_COLUMNS_PER_ROW; ++i) columns_list[i]= "";
   char comment_with_number[256];
@@ -847,23 +901,27 @@ int pgfindlib_file(char *buffer, unsigned int *buffer_length, const char *line, 
   for (int i= 0; i < MAX_COLUMNS_PER_ROW; ++i) columns_list[i]= "";
   unsigned int columns_list_number= COLUMN_FOR_COMMENT_1;
 
-  char warning_max_inode_count_is_too_small[64]= "";
-  char warning_stat_next_failed[64]= "";
-  char warning_access_next_failed[64]= "";
+  char warning_max_inode_count_is_too_small[64]= ""; /* Do not move warnings into "if ... {} ...", columns_list needs their addresses */
+  char warning_lstat_failed[64]= "";
+  char warning_access_failed[64]= "";
   char warning_symlink[64]= "";
   char warning_duplicate[64]= "";
   char warning_elf[64]= "";
   if (access(line_copy, R_OK) != 0) /* It's poorly documented but tests indicate X_OK doesn't matter and R_OK matters */
   {
-    pgfindlib_comment_in_row(warning_access_next_failed, PGFINDLIB_COMMENT_ACCESS_NEXT_FAILED, 0);
-    columns_list[columns_list_number++]= warning_access_next_failed;  
+#if (PGFINDLIB_COMMENT_ACCESS_FAILED != 0)
+    pgfindlib_comment_in_row(warning_access_failed, PGFINDLIB_COMMENT_ACCESS_FAILED, 0);
+    columns_list[columns_list_number++]= warning_access_failed;
+#endif
   }
   ino_t inode;
   struct stat sb;
   if (lstat(line_copy, &sb) == -1)
   {
-    pgfindlib_comment_in_row(warning_stat_next_failed, PGFINDLIB_COMMENT_STAT_NEXT_FAILED, 9);
-    columns_list[columns_list_number++]= warning_stat_next_failed;
+#if (PGFINDLIB_COMMENT_LSTAT_FAILED != 0)
+    pgfindlib_comment_in_row(warning_lstat_failed, PGFINDLIB_COMMENT_LSTAT_FAILED, 0);
+    columns_list[columns_list_number++]= warning_lstat_failed;
+#endif
     inode= -1; /* a dummy so count of inodes is right but this won't be found later */
   }
   else
@@ -874,18 +932,22 @@ int pgfindlib_file(char *buffer, unsigned int *buffer_length, const char *line, 
     /* Here, if (duplicate) and include duplicates is off, return */
     if (st_mode == S_IFLNK)
     {
+#if (PGFINDLIB_COMMENT_SYMLINK != 0)
       /* todo: find out: symlink of what? */
       pgfindlib_comment_in_row(warning_symlink, PGFINDLIB_COMMENT_SYMLINK, 0);
       columns_list[columns_list_number++]= warning_symlink;
+#endif
     }
     inode= sb.st_ino;
     for (int i= 0; i < *inode_count; ++i)
     {
       if (inode_list[i] == inode)
       {
-       pgfindlib_comment_in_row(warning_duplicate, PGFINDLIB_COMMENT_NEXT_DUPLICATE, i + 1); /* "+ 1" because row_number starts at 1 */
-        columns_list[columns_list_number++]= warning_duplicate;
-        break;
+#if (PGFINDLIB_COMMENT_DUPLICATE != 0)
+       pgfindlib_comment_in_row(warning_duplicate, PGFINDLIB_COMMENT_DUPLICATE, i + 1); /* "+ 1" because row_number starts at 1 */
+       columns_list[columns_list_number++]= warning_duplicate;
+#endif
+       break;
       }
     }
   }
@@ -894,26 +956,31 @@ int pgfindlib_file(char *buffer, unsigned int *buffer_length, const char *line, 
     int elf_rval= pgfindlib_read_elf(tokener_list, line_copy, PGFINDLIB_REASON_SO_CHECK, program_e_machine);
     if (elf_rval != 0)
     {
+      int unknown_failures= 0;
+      /* These all have the same warning_elf so suppressing with "#if ... #endif" would be complicated. */
       if (elf_rval == PGFINDLIB_COMMENT_ELF_OPEN_FAILED)
         pgfindlib_comment_in_row(warning_elf, PGFINDLIB_COMMENT_ELF_OPEN_FAILED, 0);
-      if (elf_rval == PGFINDLIB_COMMENT_ELF_READ_FAILED)
+      else if (elf_rval == PGFINDLIB_COMMENT_ELF_READ_FAILED)
         pgfindlib_comment_in_row(warning_elf, PGFINDLIB_COMMENT_ELF_READ_FAILED, 0);
-      if (elf_rval == PGFINDLIB_COMMENT_ELF_HAS_INVALID_IDENT)
+      else if (elf_rval == PGFINDLIB_COMMENT_ELF_HAS_INVALID_IDENT)
         pgfindlib_comment_in_row(warning_elf, PGFINDLIB_COMMENT_ELF_HAS_INVALID_IDENT, 0);
-      if (elf_rval == PGFINDLIB_COMMENT_ELF_IS_NOT_EXEC_OR_DYN)
+      else if (elf_rval == PGFINDLIB_COMMENT_ELF_IS_NOT_EXEC_OR_DYN)
         pgfindlib_comment_in_row(warning_elf, PGFINDLIB_COMMENT_ELF_IS_NOT_EXEC_OR_DYN, 0);
-      if (elf_rval == PGFINDLIB_COMMENT_ELF_SHT_DYNAMIC_NOT_FOUND)
+      else if (elf_rval == PGFINDLIB_COMMENT_ELF_SHT_DYNAMIC_NOT_FOUND)
         pgfindlib_comment_in_row(warning_elf, PGFINDLIB_COMMENT_ELF_SHT_DYNAMIC_NOT_FOUND, 0);
-      if (elf_rval == PGFINDLIB_COMMENT_ELF_MACHINE_DOES_NOT_MATCH)
+      else if (elf_rval == PGFINDLIB_COMMENT_ELF_MACHINE_DOES_NOT_MATCH)
         pgfindlib_comment_in_row(warning_elf, PGFINDLIB_COMMENT_ELF_MACHINE_DOES_NOT_MATCH, 0);
-      columns_list[columns_list_number++]= warning_elf;
+      else ++unknown_failures; /* if this happens it's a bug */
+      if (unknown_failures == 0) columns_list[columns_list_number++]= warning_elf;
     }
   }
 
   if (*inode_count == PGFINDLIB_MAX_INODE_COUNT)
   {
+#if (PGFINDLIB_COMMENT_MAX_INODE_COUNT_TOO_SMALL != 0)
     pgfindlib_comment_in_row(warning_max_inode_count_is_too_small, PGFINDLIB_COMMENT_MAX_INODE_COUNT_TOO_SMALL, 0);
-    columns_list[columns_list_number++]= warning_symlink;
+    columns_list[columns_list_number++]= warning_max_inode_count_is_too_small;
+#endif
   }
   else
   {
@@ -926,8 +993,6 @@ int pgfindlib_file(char *buffer, unsigned int *buffer_length, const char *line, 
 
   columns_list[COLUMN_FOR_PATH]= line_copy;
   columns_list[COLUMN_FOR_SOURCE]= comment_string;
-
-    /* more columns! */
 
   return pgfindlib_row_bottom_level(buffer, buffer_length, buffer_max_length, row_number, columns_list);
 }
@@ -968,7 +1033,7 @@ int pgfindlib_keycmp(const char *a, unsigned int a_len, const char *b)
   return 0;
 }
 int pgfindlib_tokenize(const char *statement, struct tokener tokener_list[],
-                       unsigned int *row_number,
+                       unsigned int *row_number, ino_t inode_list[], unsigned int *inode_count,
                        char *buffer, unsigned int *buffer_length, unsigned buffer_max_length)
 {
   const char *p= statement;
@@ -978,7 +1043,7 @@ int pgfindlib_tokenize(const char *statement, struct tokener tokener_list[],
   if (p == NULL)
   {
     pgfindlib_comment_is_row("Syntax error. Statement is NULL", PGFINDLIB_COMMENT_STATEMENT_SYNTAX_STATEMENT_IS_NULL,
-                            buffer, buffer_length, buffer_max_length, row_number);
+                            buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
     return PGFINDLIB_ERROR_STATEMENT_SYNTAX;
   }
   const char *statement_end= p + strlen(p);
@@ -987,7 +1052,7 @@ int pgfindlib_tokenize(const char *statement, struct tokener tokener_list[],
     if (p > statement_end)
     {
       pgfindlib_comment_is_row("Syntax error. p > statement end", PGFINDLIB_COMMENT_STATEMENT_SYNTAX_P_GREATER_STATEMENT_END,
-                            buffer, buffer_length, buffer_max_length, row_number);
+                            buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
       return PGFINDLIB_ERROR_STATEMENT_SYNTAX;
     }
     if (*p == ' ') { ++p; continue; }
@@ -998,7 +1063,7 @@ int pgfindlib_tokenize(const char *statement, struct tokener tokener_list[],
       if (p_next == NULL)
       {
         pgfindlib_comment_is_row("Syntax error. Quote without end quote", PGFINDLIB_COMMENT_STATEMENT_SYNTAX_QUOTE_WITHOUT_END_QUOTE,
-                                 buffer, buffer_length, buffer_max_length, row_number);
+                                 buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
         return PGFINDLIB_ERROR_STATEMENT_SYNTAX;
       }
     }
@@ -1018,14 +1083,14 @@ int pgfindlib_tokenize(const char *statement, struct tokener tokener_list[],
     if (tokener_list[token_number].tokener_length >= PGFINDLIB_MAX_TOKEN_LENGTH)
     {
       pgfindlib_comment_is_row("Syntax error. Token too long", PGFINDLIB_COMMENT_STATEMENT_SYNTAX_TOKEN_TOO_LONG,
-                               buffer, buffer_length, buffer_max_length, row_number);
+                               buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
       return PGFINDLIB_ERROR_STATEMENT_SYNTAX;
     }
     ++token_number;
     if (token_number >= PGFINDLIB_MAX_TOKENS_COUNT)
     {
       pgfindlib_comment_is_row("Syntax error. Too many tokens", PGFINDLIB_COMMENT_STATEMENT_SYNTAX_TOO_MANY_TOKENS,
-                               buffer, buffer_length, buffer_max_length, row_number);
+                               buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
       return PGFINDLIB_ERROR_STATEMENT_SYNTAX;
     }
     if (*p_next == '\0') break;
@@ -1037,7 +1102,7 @@ int pgfindlib_tokenize(const char *statement, struct tokener tokener_list[],
       if (token_number >= PGFINDLIB_MAX_TOKENS_COUNT)
       {
         pgfindlib_comment_is_row("Syntax error. Comma without item", PGFINDLIB_COMMENT_STATEMENT_SYNTAX_COMMA_WITHOUT_ITEM,
-                                 buffer, buffer_length, buffer_max_length, row_number);
+                                 buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
         return PGFINDLIB_ERROR_STATEMENT_SYNTAX;
       }
     }
@@ -1056,7 +1121,7 @@ int pgfindlib_tokenize(const char *statement, struct tokener tokener_list[],
       if (current_clause != 0)
       {
         pgfindlib_comment_is_row("Syntax error. FROM out of order", PGFINDLIB_COMMENT_STATEMENT_SYNTAX_FROM_OUT_OF_ORDER,
-                                 buffer, buffer_length, buffer_max_length, row_number);
+                                 buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
         return PGFINDLIB_ERROR_STATEMENT_SYNTAX;
       }
       tokener_list[i].tokener_comment_id= PGFINDLIB_TOKEN_FROM;
@@ -1068,7 +1133,7 @@ int pgfindlib_tokenize(const char *statement, struct tokener tokener_list[],
       if ((current_clause != 0) && (current_clause != PGFINDLIB_TOKEN_FROM))
       {
         pgfindlib_comment_is_row("Syntax error. WHERE out of order", PGFINDLIB_COMMENT_STATEMENT_SYNTAX_WHERE_OUT_OF_ORDER,
-                                 buffer, buffer_length, buffer_max_length, row_number);
+                                 buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
         return PGFINDLIB_ERROR_STATEMENT_SYNTAX;
       }
       tokener_list[i].tokener_comment_id= PGFINDLIB_COMMENT_STATEMENT_SYNTAX_WHERE_OUT_OF_ORDER;
@@ -1111,7 +1176,7 @@ int pgfindlib_tokenize(const char *statement, struct tokener tokener_list[],
       if (token_number >= PGFINDLIB_MAX_TOKENS_COUNT - 1)
       {
         pgfindlib_comment_is_row("Syntax error. Too many tokens when adding default", PGFINDLIB_COMMENT_STATEMENT_SYNTAX_TOO_MANY_TOKENS_WHEN_ADDING_DEFAULT,
-        buffer, buffer_length, buffer_max_length, row_number);
+        buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
         return PGFINDLIB_ERROR_STATEMENT_SYNTAX;
       }
       tokener_list[token_number].tokener_name= pgfindlib_standard_source_array[i];
@@ -1135,10 +1200,6 @@ int pgfindlib_so_cache(const struct tokener tokener_list[], int tokener_number,
                        char **malloc_buffer_2, unsigned int *malloc_buffer_2_length, unsigned malloc_buffer_2_max_length)
 {
   int rval= PGFINDLIB_OK;
-#ifdef OBSOLETE
-  rval= pgfindlib_row_source_name(buffer, &buffer_length, buffer_max_length, &row_number, inode_list, &inode_count, "ld.so.cache");
-  if (rval != PGFINDLIB_OK) return rval;
-#endif
   const char *ldconfig; /* must be able to access ldconfig in some standard directory or user's path */
   for (int i= 0; i <= 5; ++i)
   {
@@ -1204,7 +1265,7 @@ int pgfindlib_so_cache(const struct tokener tokener_list[], int tokener_number,
       sprintf(comment, "%s -p or %s -r failed", ldconfig, ldconfig); 
       rval= pgfindlib_comment_is_row(comment,
                          PGFINDLIB_COMMENT_LDCONFIG_FAILED,
-                         buffer, &buffer_length, buffer_max_length, &row_number);
+                         buffer, &buffer_length, buffer_max_length, &row_number, inode_list, &inode_count);
       if (rval != PGFINDLIB_OK) return rval;
     }
 #endif
@@ -1298,12 +1359,6 @@ int pgfindlib_source_scan(const char *librarylist, char *buffer, unsigned int *b
     int source_length= tokener_list[tokener_number].tokener_length;
     memcpy(source, tokener_list[tokener_number].tokener_name, source_length);
     source[source_length]= '\0';
-/* Following should be: if PGFINDLIB_COMMENT_ANY != 0 */
-/* #if (PGFINDLIB_TOKEN_SOURCE_LD_LIBRARY_PATH != 0) */
-  /* todo: ordinarily we don't want source name */
-    rval= pgfindlib_row_source_name(buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count, source);
-    if (rval != PGFINDLIB_OK) return rval;
-/* #endif */
   }
   char one_library_or_file[PGFINDLIB_MAX_PATH_LENGTH + 1];
 
@@ -1346,11 +1401,16 @@ int pgfindlib_source_scan(const char *librarylist, char *buffer, unsigned int *b
 #if (PGFINDLIB_COMMENT_REPLACE_STRING != 0)
       if (replacements_count > 0)
       {
+        char source_name[32];
+        unsigned int source_name_length= tokener_list[tokener_number].tokener_length;
+        if (source_name_length > 32 - 1) source_name_length= 32 - 1;
+        memcpy(source_name, tokener_list[tokener_number].tokener_name, source_name_length);
+        source_name[source_name_length]= '\0';
         char comment[PGFINDLIB_MAX_PATH_LENGTH*2 + 128];
-        sprintf(comment, "replaced %s with %s", orig_one_library_or_file, one_library_or_file);
+        sprintf(comment, "in source %s replaced %s with %s", source_name, orig_one_library_or_file, one_library_or_file);
         rval= pgfindlib_comment_is_row(comment,
                          PGFINDLIB_COMMENT_REPLACE_STRING,
-                         buffer, buffer_length, buffer_max_length, row_number);
+                         buffer, buffer_length, buffer_max_length, row_number, inode_list, inode_count);
         if (rval != PGFINDLIB_OK) return rval;
       }
 #endif
@@ -1361,8 +1421,6 @@ int pgfindlib_source_scan(const char *librarylist, char *buffer, unsigned int *b
         if (pgfindlib_find_line_in_statement(tokener_list, file_part) == 0) continue; /* doesn't match requirement */
         rval= pgfindlib_file(buffer, buffer_length, one_library_or_file, buffer_max_length, row_number,
                              inode_list, inode_count, inode_warning_count, tokener_list[tokener_number], program_e_machine);
-        if (rval != PGFINDLIB_OK) return rval;
-        rval= pgfindlib_strcat(buffer, buffer_length, "\n", buffer_max_length);
         if (rval != PGFINDLIB_OK) return rval;
       }
       else

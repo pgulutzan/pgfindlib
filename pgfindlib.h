@@ -15,12 +15,14 @@
   You should have received a copy of the GNU General Public License
   along with this program; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
-
-  For explanation see the README.md file which comes with the pgfindlib package
+*/
+/*
+  Package: https://github.com/pgulutzan/pgfindlib
 */
 
 #ifndef PGFINDLIB_H
 #define PGFINDLIB_H
+
 extern int pgfindlib(const char *statement, char *buffer, unsigned int buffer_max_length);
 
 #define PGFINDLIB_OK 0
@@ -31,7 +33,7 @@ extern int pgfindlib(const char *statement, char *buffer, unsigned int buffer_ma
 #define PGFINDLIB_MALLOC_BUFFER_2_OVERFLOW -5
 #define PGFINDLIB_ERROR_STATEMENT_SYNTAX -6
 
-/* PGFINDLIB_INCLUDE_ items must be 0 or 1. To not include, say e.g. -DPGFINDLIB_INCLUDE_COMMENT_AT_START=0 */
+/* PGFINDLIB_INCLUDE_ items must be 0 or 1. To not include, say e.g. -DPGFINDLIB_INCLUDE_ROW_VERSIONT=0 */
 
 #ifndef PGFINDLIB_INCLUDE_LD_AUDIT
 #define PGFINDLIB_INCLUDE_LD_AUDIT 1
@@ -77,23 +79,15 @@ extern int pgfindlib(const char *statement, char *buffer, unsigned int buffer_ma
 #define PGFINDLIB_INCLUDE_HARDLINKS 1
 #endif
 
-#ifndef PGFINDLIB_INCLUDE_COMMENT_AT_START
-#define PGFINDLIB_INCLUDE_COMMENT_AT_START 1
-#endif
 #ifndef PGFINDLIB_INCLUDE_COMMENT_SOURCE_NAME
 #define PGFINDLIB_INCLUDE_COMMENT_SOURCE_NAME 1
-#endif
-#ifndef PGFINDLIB_INCLUDE_COMMENT_UNEXPECTED
-#define PGFINDLIB_INCLUDE_COMMENT_UNEXPECTED 1
-#endif
-#ifndef PGFINDLIB_INCLUDE_COMMENT_RE_NEXT_ITEM
-#define PGFINDLIB_INCLUDE_COMMENT_RE_NEXT_ITEM 1
 #endif
 
 #ifndef PGFINDLIB_INCLUDE_ROW_VERSION
 #define PGFINDLIB_INCLUDE_ROW_VERSION 1
 #endif
 
+/* If this is changed to 1, every source gets a row comment */
 #ifndef PGFINDLIB_INCLUDE_ROW_SOURCE_NAME
 #define PGFINDLIB_INCLUDE_ROW_SOURCE_NAME 0
 #endif
@@ -118,6 +112,7 @@ extern int pgfindlib(const char *statement, char *buffer, unsigned int buffer_ma
 #define COLUMN_FOR_COMMENT_3 5
 
 /* Every COLUMN_FOR_COMMENT_x starts with a 3-digit number. Generlly informative ones are 1-49, severe or unexpected ones are 50-99, syntax errors are 100-150 */
+/* Many non-syntax-related comments can be suppressed by changing the #define to 0. */
 #define PGFINDLIB_COMMENT_VERSION                     1
 #define PGFINDLIB_COMMENT_PGFINDLIB                   2
 #define PGFINDLIB_COMMENT_URL                         3
@@ -131,7 +126,7 @@ extern int pgfindlib(const char *statement, char *buffer, unsigned int buffer_ma
 #define PGFINDLIB_COMMENT_MAX_INODE_COUNT_TOO_SMALL  11
 #define PGFINDLIB_COMMENT_REPLACE_STRING             12
 #define PGFINDLIB_COMMENT_SYMLINK                    13
-#define PGFINDLIB_COMMENT_NEXT_DUPLICATE             14
+#define PGFINDLIB_COMMENT_DUPLICATE                  14
 #define PGFINDLIB_COMMENT_ACCESS_LDCONFIG_FAILED     50
 #define PGFINDLIB_COMMENT_CANNOT_READ_RPATH          51
 #define PGFINDLIB_COMMENT_CANNOT_READ_RUNPATH        52
@@ -142,9 +137,8 @@ extern int pgfindlib(const char *statement, char *buffer, unsigned int buffer_ma
 #define PGFINDLIB_COMMENT_EHDR_IDENT                 57
 #define PGFINDLIB_COMMENT_CANT_FIND_DYNAMIC_LOADER   58
 #define PGFINDLIB_COMMENT_CANT_ACCESS_DYNAMIC_LOADER 59
-#define PGFINDLIB_COMMENT_ACCESS_NEXT_FAILED         60
-#define PGFINDLIB_COMMENT_STAT_NEXT_FAILED           61
-
+#define PGFINDLIB_COMMENT_ACCESS_FAILED              60
+#define PGFINDLIB_COMMENT_LSTAT_FAILED               61
 #define PGFINDLIB_COMMENT_ELF_OPEN_FAILED            70
 #define PGFINDLIB_COMMENT_ELF_READ_FAILED            71
 #define PGFINDLIB_COMMENT_ELF_HAS_INVALID_IDENT      72
@@ -152,7 +146,6 @@ extern int pgfindlib(const char *statement, char *buffer, unsigned int buffer_ma
 #define PGFINDLIB_COMMENT_ELF_SHT_DYNAMIC_NOT_FOUND  74
 #define PGFINDLIB_COMMENT_ELF_MACHINE_DOES_NOT_MATCH 75
 #define PGFINDLIB_COMMENT_ELF_BUFFER_TOO_SMALL       76
-
 #define PGFINDLIB_COMMENT_STATEMENT_SYNTAX_STATEMENT_IS_NULL                   100
 #define PGFINDLIB_COMMENT_STATEMENT_SYNTAX_P_GREATER_STATEMENT_END             101
 #define PGFINDLIB_COMMENT_STATEMENT_SYNTAX_QUOTE_WITHOUT_END_QUOTE             102

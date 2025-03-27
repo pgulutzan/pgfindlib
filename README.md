@@ -22,33 +22,37 @@ picked up, and from where, and what choices it ignored.</P>
 mkdir /tmp/pgfindlib_example
 echo "Dummy .so" >> /tmp/pgfindlib_example/libutil.so
 gcc -o main main.c pgfindlib.c  -Wl,-rpath,/tmp/pgfindlib_example
-./main 'where libutil.so, libcurl.so, libgcc_s.so'
+LD_LIBRARY_PATH='/$LIB' ./main 'where libutil.so, libcurl.so, libgcc_s.so'
 </PRE>
 The result might look like this:
 <PRE>
-0,,,002 pgfindlib,001 version 0.9.7,003 https://github.com/pgulutzan/pgfindlib,,
-1,,,005 $LIB=lib/x86_64-linux-gnu,006 $PLATFORM=x86_64,007 $ORIGIN=/home/pgulutzan/pgfindlib,,
-2,/tmp/pgfindlib_example/libutil.so,DT_RUNPATH,071 elf read failed,,,,
-3,/lib/libgcc_s.so.1,ld.so.cache,,,,,
-4,/lib/x86_64-linux-gnu/libcurl.so,ld.so.cache,,,,,
-5,/lib/x86_64-linux-gnu/libcurl.so.4,ld.so.cache,014 duplicate of 4,,,,
-6,/lib/x86_64-linux-gnu/libgcc_s.so.1,ld.so.cache,,,,,
-7,/lib/x86_64-linux-gnu/libutil.so,ld.so.cache,,,,,
-8,/lib/x86_64-linux-gnu/libutil.so.1,ld.so.cache,014 duplicate of 7,,,,
-9,/lib32/libgcc_s.so.1,ld.so.cache,075 elf machine does not match,,,,
-10,/lib32/libutil.so.1,ld.so.cache,075 elf machine does not match,,,,
-11,/lib/libgcc_s.so.1,default_paths,014 duplicate of 3,,,,
-12,/usr/lib/libgcc_s.so.1,default_paths,014 duplicate of 3,,,,
-
-rval=0
+1,,,002 pgfindlib,001 version 0.9.7,003 https://github.com/pgulutzan/pgfindlib,,
+2,,,005 $LIB=lib/x86_64-linux-gnu,006 $PLATFORM=x86_64,007 $ORIGIN=/home/pgulutzan/pgfindlib,,
+3,,,012 in source LD_LIBRARY_PATH replaced /$LIB with /lib/x86_64-linux-gnu,,,,
+4,/lib/x86_64-linux-gnu/libcurl.so,LD_LIBRARY_PATH,013 symlink,,,,
+5,/lib/x86_64-linux-gnu/libcurl.so.4,LD_LIBRARY_PATH,013 symlink,,,,
+6,/lib/x86_64-linux-gnu/libcurl.so.4.6.0,LD_LIBRARY_PATH,,,,,
+7,/lib/x86_64-linux-gnu/libgcc_s.so.1,LD_LIBRARY_PATH,,,,,
+8,/lib/x86_64-linux-gnu/libutil.so,LD_LIBRARY_PATH,013 symlink,,,,
+9,/lib/x86_64-linux-gnu/libutil.so.1,LD_LIBRARY_PATH,013 symlink,,,,
+10,/tmp/pgfindlib_example/libutil.so,DT_RUNPATH,071 elf read failed,,,,
+11,/lib/libgcc_s.so.1,ld.so.cache,,,,,
+12,/lib/x86_64-linux-gnu/libcurl.so,ld.so.cache,013 symlink,014 duplicate of 4,,,
+13,/lib/x86_64-linux-gnu/libcurl.so.4,ld.so.cache,013 symlink,014 duplicate of 5,,,
+14,/lib/x86_64-linux-gnu/libgcc_s.so.1,ld.so.cache,014 duplicate of 7,,,,
+15,/lib/x86_64-linux-gnu/libutil.so,ld.so.cache,013 symlink,014 duplicate of 8,,,
+16,/lib/x86_64-linux-gnu/libutil.so.1,ld.so.cache,013 symlink,014 duplicate of 9,,,
+17,/lib32/libgcc_s.so.1,ld.so.cache,075 elf machine does not match,,,,
+18,/lib32/libutil.so.1,ld.so.cache,013 symlink,075 elf machine does not match,,,
+19,/lib/libgcc_s.so.1,default_paths,014 duplicate of 11,,,,
+20,/usr/lib/libgcc_s.so.1,default_paths,014 duplicate of 11,,,,
 
 rval=0
 </PRE>
 </P>
 
 <P>This means: the loader would look first in /lib/x86_64-linux-gnu
-because there was an earlier "export LD_LIBRARY_PATH='/$LIB'"
-(not shown because values of environment variables can be surprises).
+because of LD_LIBRARY_PATH.
 This takes precedence over DT_RUNPATH, which is where the first
 occurrence of libutil.so appears (this appears because of the
 -rpath option in the gcc command). Finally there are some .so libraries
@@ -85,32 +89,34 @@ Its arguments are:<BR>
 buffer contents with paths including .so names in the order the loader looks for them,
 which is determined by gcc flags and environment variables.
 For example:<BR>
-11,/lib/libgcc_s.so.1,default_paths,014 duplicate of 3,,,,<BR>
+20,/usr/lib/libgcc_s.so.1,default_paths,014 duplicate of 11,,,,<BR>
 has 7 columns (all rows have 7 columns).
 The first column is a row number.
 The second column is a path.
-The third column is the "source" -- this was in the dynamic loaders default_paths.
+The third column is the "source" -- this was in the dynamic loader's default_paths.
 The remaining columns are comments including errors or warnings, and are often blank.
 </P>
 
 <P>The license is: GPLv2.</P>
 
-<P>The assumed environment is: linux or FreeBSD containing gcc and the almost-always-present utilities ldconfig, uname.
+<P>The assumed environment is: Linux or FreeBSD containing gcc and the almost-always-present utilities ldconfig, uname.
 </P>
 
 <H3 id="Re Errors">Re Errors</H3><HR>
   As well as filling the buffer, pgfindlib returns an error code as defined in pgfindlib.h:
-  0 PGFINDLIB_OK no error
-  -1 PGFINDLIB_ERROR_MAX_BUFFER_LENGTH_TOO_SMALL execution stopped after output of nearly buffer_max_length bytes
-  -2 PGFINDLIB_ERROR_NULL e.g. pgfindlib() was called with a null pointer so nothing was done
-  -3 PGFINDLIB_ERROR_MAX_PATH_LENGTH_TOO_SMALL e.g. a path is 5000 bytes (the default maximum is 4096)
-  ... In fact anything other than 0 should be extremely rare if the statement syntax is okay.
+  0 PGFINDLIB_OK no error,
+  -1 PGFINDLIB_ERROR_MAX_BUFFER_LENGTH_TOO_SMALL execution stopped after output of nearly buffer_max_length bytes,
+  -2 PGFINDLIB_ERROR_NULL e.g. pgfindlib() was called with a null pointer so nothing was done,
+  -3 PGFINDLIB_ERROR_MAX_PATH_LENGTH_TOO_SMALL e.g. a path name is 5000 bytes (the default maximum is 4096),
+  -4 and -5 PGFINDLIB_MALLOC_BUFFER_x_OVERFLOW because malloc() failed for a few bytes,
+  -6 some problem with the statement syntax
+  ... In fact anything other than 0 should be extremely rare if what's passed is okay.
 
 <H3 id="Re Filter">Re Filter</H3><HR>
   From the passed sonames, pgfindlib filters the results of readdir() + popen("...ldconfig") from the sources.
   For example, when calling from
   <a href="https://github.com/ocelot-inc/ocelotgui">ocelotgui</a>, we only care about .so libraries that might be needed for
-  MariaDB or MySQL or Tarantool, which can include libcrypto (we might care for fewer .so libraries if ocelotgui
+  MariaDB or MySQL or Tarantool, which can include libcrypto.so (we might care for fewer .so libraries if ocelotgui
   is started with appropriate command-line or configuration-file options or a CMakeLists.txt switch.
   So we'd call pgfindlib("where libmysqlclient.so,libmariadb.so,libmariadbclient.so,tarantool.so", ...);
 
@@ -137,7 +143,6 @@ There is no check for ld.so.preload.</P>
 <H3 id="Re rpath">Re rpath</H3><HR>
 <P>Get DT_RPATH and/or DT_RUNPATH in .dynamic section of the executable file's header.
 If header is stripped (unlikely), then the buffer will have nothing in DT_RPATH or DT_RUNPATH.
-elf.h seems to be standard but it might be useless to try to look for it with mingw.
 On test machine it's DT_RPATH iff --disable-new-dtags, this may be default on an old platform.
 On test machine it's DT_RUNPATH if --enable-new-dtags which is typically default nowadays..
 Some say that loader searches DT_RPATH recursively, but in tests it doesn't happen.</P>
@@ -180,7 +185,7 @@ The loader knows nothing about the items in this section, it's informative.</P>
 
 <H3 id="Re order of execution">Re order of execution</H3><HR>
 <P>Officially it's LD_AUDIT then LD_PRELOAD then DT_RPATH then LD_LIBRARY_PATH then DT_RUNPATH then ld.so.cache
-then default_paths, so that's the display order.
+then default_paths then LD_PGFINDLIB_PATH, so that's the display order.
 However, one of the function's benefits is that it provides enough information for programmers to
 pick .so files from the buffer and dlopen() them ignoring the loader's order.
 Also the calling program can change the desired order, or add and remove sources, via
@@ -189,14 +194,14 @@ the FROM clause which will be described later.
 
 <H3 id="Re $ORIGIN">Re $ORIGIN</H3><HR>
 <P>It sees $ORIGIN, and replaces it with the path of the executable.
-Example: if the executable is /home/pgulutzan/pgfindlib/main libcrypto,
+Example: if the executable is /home/pgulutzan/pgfindlib/main,
          and there is a file libcrypto.so on /home/pgulutzan/pgfindlib/lib,
          and the gcc has -Wl,-rpath,\$ORIGIN/lib (but good luck trying to specify it in a script or cmake!),
          then the result will be
          /home/pgulutzan/pgfindlib/lib/libcrypto.so
          and not $ORIGIN/lib/libcrypto.so, but a comment may also appear.
 This is done by reading the symbolic link proc/self/exe with readlink.
-It's supposed to happen for DT_RPATH and DT_RUN_PATH but in fact it happens regardless of source.
+Replacement is supposed to happen for DT_RPATH and DT_RUN_PATH but in fact it happens regardless of source.
 There has to be a different source for
 <a href="https://stackoverflow.com/questions/1023306/finding-current-executables-path-without-proc-self-exe">FreeBSD</a>.
 In tests the usage was -Wl,-z,origin,-rpath,./lib,-rpath,\$ORIGIN</P>
@@ -214,7 +219,7 @@ If the path is blank or there's a trailing : we do not treat it as "." which see
 
 <H3 id="Re ldconfig -p and uname -m">Re ldconfig -p and uname -m</H3><HR>
 <P>These are very common, so one assumes that they're in the usual places and invokes them via popen().
-If the call fails then there's no output and no error.
+If the call fails then there's a warning.
 There's an assumption that ldconfig -p output looks the same on every Linux distro, which is undocumented,
 and in fact the format on FreeBSD with ldconfig -r is quite different, but still okay.
 Really minimal Linux distros e.g. Alpine won't have them, on such distros you'd need to install in advance.
@@ -225,7 +230,7 @@ The strings utility e.g. "strings -n5 /etc/ld.so.cache" might work but not with 
 For example, the user might not have permission -- there will be a comment if access(..., R_OK)
 fails, but no comment for other cases.</P>
 
-<H3 id="Re trailing solidus i.e. forward slash i.e. /">Re trailing solidus i.e. forward slash i.e. /e</H3><HR>
+<H3 id="Re trailing solidus i.e. forward slash i.e. /">Re trailing solidus i.e. forward slash i.e. /</H3><HR>
 <P>See https://stackoverflow.com/questions/980255/should-a-directory-path-variable-end-with-a-trailing-slash
 So if it already ends with / then we don't add a solidus, but if people want to pass ///, well, it's up to them.</P>
 
@@ -249,7 +254,7 @@ Comparisons are case sensitive and results are undefined if the soname does not 
 <H3 id="Re pgfindlib_tests.sh">Re pgfindlib_tests.sh</H3><HR>
 <P>This Bash script has a set of tests that the loader really goes in this order.
 To make sure that your situation is the same as what we found on various test machines,
-say chmod +x then ./pgfindlib_tests.sh
+say chmod +x then ./pgfindlib_tests.sh --
 You should see that all test results are marked "Good".</P>
 
 <H3 id="FROM">Re FROM</H3><HR>
@@ -261,7 +266,7 @@ Comparisons or names are case sensitive.
 For example:<BR>
 FROM default_paths, LD_LIBRARY_PATH, /tmp WHERE libcrypto.so<BR>
 will look in default_paths and LD_LIBRARY_PATH ignoring the other standard sources,
-and will additionally check the /tmp directory.
+and will additionally check a non-standard source, the /tmp directory.
 
 <H3 id="Some more possible tests">Some more possible tests</H3><HR>
 <P>(using main.c which is supplied with the package)
@@ -274,7 +279,7 @@ gcc -o main main.c pgfindlib.c -Wl,-rpath,./lib,-rpath,./ocelotgui,-disable-new-
 ./main 'FROM D_RPATH, D_RUNPATH WHERE libcrypto.so'
 gcc -o main main.c pgfindlib.c -Wl,-z,origin,-rpath,./lib,-rpath,\$ORIGIN
 ./main 'where libcrypto.so'
-gcc -o main main.c pgfindlib.c -DPGFINDLIB_WARNING_LEVEL=1 -Wl,-z,origin,-rpath,./lib,-rpath,\$ORIGIN
+gcc -o main main.c pgfindlib.c -DPGFINDLIB_INCLUDE_ROW_SOURCE_NAME=1 -Wl,-z,origin,-rpath,./lib,-rpath,\$ORIGIN
 ./main 'where libcrypto.so'</PRE>
 </PRE></P>
 
