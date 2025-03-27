@@ -79,10 +79,6 @@ extern int pgfindlib(const char *statement, char *buffer, unsigned int buffer_ma
 #define PGFINDLIB_INCLUDE_HARDLINKS 1
 #endif
 
-#ifndef PGFINDLIB_INCLUDE_COMMENT_SOURCE_NAME
-#define PGFINDLIB_INCLUDE_COMMENT_SOURCE_NAME 1
-#endif
-
 #ifndef PGFINDLIB_INCLUDE_ROW_VERSION
 #define PGFINDLIB_INCLUDE_ROW_VERSION 1
 #endif

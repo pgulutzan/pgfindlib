@@ -2,7 +2,7 @@
   pgfindlib.c --   To get a list of paths and .so files along paths dynamic loader might choose, with some extra information
 
    Version: 0.9.7
-   Last modified: March 26 2025
+   Last modified: March 27 2025
 
   Copyright (c) 2025 by Peter Gulutzan. All rights reserved.
 
@@ -77,10 +77,11 @@ static int pgfindlib_row_version(char *buffer, unsigned int *buffer_length, unsi
 static int pgfindlib_row_lib(char *buffer, unsigned int *buffer_length, unsigned buffer_max_length, unsigned int *row_number,
                              ino_t inode_list[], unsigned int *inode_count,
                              const char *lib, const char *platform, const char *origin);
+#if (PGFINDLIB_INCLUDE_ROW_SOURCE_NAME == 1)
 static int pgfindlib_row_source_name(char *buffer, unsigned int *buffer_length, unsigned buffer_max_length, unsigned int *row_number,
                              ino_t inode_list[], unsigned int *inode_count,
                              const char *source_name);
-
+#endif
 static int pgfindlib_replace_lib_or_platform_or_origin(char *one_library_or_file, unsigned int *replacements_count, const char *lib, const char *platform, const char *origin);
 static int pgfindlib_get_origin_and_lib_and_platform(char *origin, char *lib, char *platform,
                                               char *buffer, unsigned int *buffer_length, unsigned buffer_max_length,
@@ -497,6 +498,7 @@ int pgfindlib_get_origin_and_lib_and_platform(char *origin, char *lib, char *pla
 {
   int platform_change_count= 0;
   int rval= PGFINDLIB_OK;
+  int lib_change_count= 0;
 
 #ifdef PGFINDLIB_FREEBSD
   int aux_info_return= elf_aux_info(AT_EXECPATH, origin, PGFINDLIB_MAX_PATH_LENGTH);
@@ -512,8 +514,7 @@ int pgfindlib_get_origin_and_lib_and_platform(char *origin, char *lib, char *pla
   }
   strcpy(lib, "lib");
   /* platform should be set after the if/else/endif */
-#else /* the endif for this else is just before "if (platform_change_count == 0)" */
-  int lib_change_count= 0;
+#else
   {
     int readlink_return;
     readlink_return= readlink("/proc/self/exe", origin, PGFINDLIB_MAX_PATH_LENGTH);
@@ -542,12 +543,13 @@ int pgfindlib_get_origin_and_lib_and_platform(char *origin, char *lib, char *pla
 #if (PGFINDLIB_IF_GET_LIB_OR_PLATFORM != 0)
   /* utility name */
   /* FreeBSD probably won't have /bin/true, it seems to be a Linux thing, but maybe it will have id */
-  char utility_name[256]= "";
+  char utility_name[256]= ""; /* todo: change to const char * */
   if (access("/bin/true", X_OK) == 0) strcpy(utility_name, "/bin/true");
   else if (access("/bin/cp", X_OK) == 0) strcpy(utility_name, "/bin/cp");
   else if (access("/usr/bin/true", X_OK) == 0) strcpy(utility_name, "/usr/bin/true");
   else if (access("/usr/bin/cp", X_OK) == 0) strcpy(utility_name, "/usr/bin/cp");
   else if (access("/bin/id", X_OK) == 0) strcpy(utility_name, "/bin/id");
+  else if (access("/usr/bin/id", X_OK) == 0) strcpy(utility_name, "/usr/bin/id");
 #if (PGFINDLIB_COMMENT_NO_TRUE_OR_CP != 0)
   if (strcmp(utility_name, "") == 0)
   {
