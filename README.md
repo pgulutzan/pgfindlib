@@ -285,6 +285,6 @@ gcc -o main main.c pgfindlib.c -DPGFINDLIB_INCLUDE_ROW_SOURCE_NAME=1 -Wl,-z,orig
 
 <H3 id="Contacts">Contacts</H3><HR>
 <P>GitHub. https://github.com/pgulutzan/pgfindlib
-This is where the sources of pgfindlib are, so use get clone to get them initially.
+This is where the sources of pgfindlib are, so use git clone to get them initially.
 The pgfindlib repository is also the place to put error reports, or just click "Like".
 </P>
