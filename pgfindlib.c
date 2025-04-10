@@ -708,7 +708,7 @@ extern void* __executable_start;
     if ((sizeof(void*)) == 8) strcpy(lib, "lib64"); /* default $LIB if pgfindlib__get_lib_or_platform doesn't work */
     else strcpy(lib, "lib");
 #if (PGFINDLIB_COMMENT_ASSUMING_LIB != 0)
-    char comment[512];
+    char comment[5000];
     sprintf(comment, "assuming $LIB is %s", lib);
     rval= pgfindlib_comment_is_row(comment,
                          PGFINDLIB_COMMENT_ASSUMING_LIB,
@@ -740,7 +740,7 @@ extern void* __executable_start;
     if (pointer_to_n != NULL) *pointer_to_n= '\0';
     strcpy(platform, buffer_for_replacement);
 #if (PGFINDLIB_COMMENT_ASSUMING_PLATFORM != 0)
-    char comment[512];
+    char comment[5000];
     sprintf(comment, "assuming $PLATFORM is %s", platform);
     rval= pgfindlib_comment_is_row(comment,
                          PGFINDLIB_COMMENT_ASSUMING_PLATFORM,
@@ -853,9 +853,9 @@ int pgfindlib_row_lib(char *buffer, unsigned int *buffer_length, unsigned buffer
                       const char *lib, const char *platform, const char *origin)
 {
   if (*inode_count != PGFINDLIB_MAX_INODE_COUNT) { inode_list[*inode_count]= -1; ++*inode_count; }
-  char column_lib[PGFINDLIB_MAX_PATH_LENGTH + 1];
-  char column_platform[PGFINDLIB_MAX_PATH_LENGTH + 1];
-  char column_origin[PGFINDLIB_MAX_PATH_LENGTH + 1];
+  char column_lib[PGFINDLIB_MAX_PATH_LENGTH + 100];
+  char column_platform[PGFINDLIB_MAX_PATH_LENGTH + 100];
+  char column_origin[PGFINDLIB_MAX_PATH_LENGTH + 100];
   sprintf(column_lib, "%03d $LIB=%s", PGFINDLIB_COMMENT_LIB_STRING, lib);
   sprintf(column_platform, "%03d $PLATFORM=%s", PGFINDLIB_COMMENT_PLATFORM_STRING, platform);
   sprintf(column_origin, "%03d $ORIGIN=%s", PGFINDLIB_COMMENT_ORIGIN_STRING, origin);
