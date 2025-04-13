@@ -240,8 +240,8 @@ repeat_malloc:
     comment_number= tokener_list[tokener_number].tokener_comment_id;
     if (comment_number == PGFINDLIB_TOKEN_END) break;
     if ((comment_number < PGFINDLIB_TOKEN_SOURCE_LD_AUDIT) || (comment_number > PGFINDLIB_TOKEN_SOURCE_NONSTANDARD)) continue;
-
-    const char *ld;
+    char tmp_source_name[PGFINDLIB_MAX_TOKEN_LENGTH + 1]= ""; /* only needed momentarily for nonstandard sources */
+    const char *ld= NULL;
     if (comment_number == PGFINDLIB_TOKEN_SOURCE_DT_RPATH)
     {
       if ((dt_strtab == NULL) || (dt_rpath == NULL)) continue;
@@ -258,21 +258,19 @@ repeat_malloc:
     }
     else if (comment_number == PGFINDLIB_TOKEN_SOURCE_NONSTANDARD)
     {
-      char source_name[PGFINDLIB_MAX_TOKEN_LENGTH + 1];
-      int source_name_length= tokener_list[tokener_number].tokener_length;
-      memcpy(source_name, tokener_list[tokener_number].tokener_name, source_name_length);
-      source_name[source_name_length]= '\0';
-      ld= source_name;
+      int tmp_source_name_length= tokener_list[tokener_number].tokener_length;
+      memcpy(tmp_source_name, tokener_list[tokener_number].tokener_name, tmp_source_name_length);
+      tmp_source_name[tmp_source_name_length]= '\0';
+      ld= tmp_source_name;
     }
     else if (comment_number != PGFINDLIB_TOKEN_SOURCE_LD_SO_CACHE)
     {
       /* Not DT_RPATH | DT_RUNPATH | default_paths | nonstandard | ld_so_cache */
       /* So it must be LD_AUDIT | LD_PRELOAD | LD_LIBRARY_PATH | LD_RUN_PATH LD_PGFINDLIB_PATH */
-      char source_name[PGFINDLIB_MAX_TOKEN_LENGTH + 1];
-      int source_name_length= tokener_list[tokener_number].tokener_length;
-      memcpy(source_name, tokener_list[tokener_number].tokener_name, source_name_length);
-      source_name[source_name_length]= '\0';
-      ld= getenv(source_name);
+      int tmp_source_name_length= tokener_list[tokener_number].tokener_length;
+      memcpy(tmp_source_name, tokener_list[tokener_number].tokener_name, tmp_source_name_length);
+      tmp_source_name[tmp_source_name_length]= '\0';
+      ld= getenv(tmp_source_name);
     }
     if (comment_number == PGFINDLIB_TOKEN_SOURCE_LD_SO_CACHE)
     {
